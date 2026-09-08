@@ -1,4 +1,4 @@
-# Family Storybook Maker
+# Charpai - A Family Heirloom with Stories
 
 Build Week Revenue product: paid buyers upload one family interview recording and receive an editable keepsake storybook with a PDF/export path.
 
