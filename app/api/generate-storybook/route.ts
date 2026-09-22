@@ -4,7 +4,7 @@ import { ConvexHttpClient } from "convex/browser";
 import ffmpegStatic from "ffmpeg-static";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -240,25 +240,62 @@ function replaceExtension(fileName: string, nextExtension: string) {
 }
 
 async function runFfmpeg(args: string[]) {
-  const executable = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg";
-  const stderr: string[] = [];
+  const candidates = await getFfmpegCandidates();
+  const failures: string[] = [];
 
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(/* turbopackIgnore: true */ executable, args, {
-      stdio: ["ignore", "ignore", "pipe"]
-    });
+  for (const executable of candidates) {
+    const stderr: string[] = [];
 
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => stderr.push(chunk));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(stderr.join("").trim() || `ffmpeg exited with code ${code}.`));
-    });
-  });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(/* turbopackIgnore: true */ executable, args, {
+          stdio: ["ignore", "ignore", "pipe"]
+        });
+
+        child.stderr.setEncoding("utf8");
+        child.stderr.on("data", (chunk: string) => stderr.push(chunk));
+        child.on("error", reject);
+        child.on("close", (code) => {
+          if (code === 0) {
+            resolve();
+            return;
+          }
+          reject(new Error(stderr.join("").trim() || `ffmpeg exited with code ${code}.`));
+        });
+      });
+      return;
+    } catch (error) {
+      failures.push(`${executable}: ${error instanceof Error ? error.message : "failed"}`);
+    }
+  }
+
+  throw new Error(`No usable ffmpeg executable found. Tried ${failures.join(" | ")}.`);
+}
+
+async function getFfmpegCandidates() {
+  const candidates = [
+    process.env.FFMPEG_PATH,
+    await existingExecutable(ffmpegStatic),
+    "ffmpeg",
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/opt/homebrew/bin/ffmpeg"
+  ];
+
+  return Array.from(new Set(candidates.filter((candidate): candidate is string => Boolean(candidate))));
+}
+
+async function existingExecutable(candidate: string | null) {
+  if (!candidate) {
+    return null;
+  }
+
+  try {
+    await access(candidate);
+    return candidate;
+  } catch {
+    return null;
+  }
 }
 
 async function extractIntake(openai: OpenAI, input: IntakePayload, transcript: string) {
