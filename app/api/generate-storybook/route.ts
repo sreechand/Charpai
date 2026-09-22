@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
+import ffmpegStatic from "ffmpeg-static";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -239,7 +240,7 @@ function replaceExtension(fileName: string, nextExtension: string) {
 }
 
 async function runFfmpeg(args: string[]) {
-  const executable = process.env.FFMPEG_PATH || "ffmpeg";
+  const executable = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg";
   const stderr: string[] = [];
 
   await new Promise<void>((resolve, reject) => {
