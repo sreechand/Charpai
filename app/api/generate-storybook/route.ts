@@ -1,11 +1,20 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
+  buildIntakeExtractionPrompt,
   buildStoryPrompt,
+  demoIntake,
   demoDraft,
+  mergeIntakeWithExtraction,
   normalizeDraft,
+  normalizeIntake,
   type IntakePayload
 } from "@/lib/storybook";
 import { maxAudioBytes } from "@/lib/files";
@@ -35,8 +44,10 @@ export async function POST(request: Request) {
     }
 
     if (!process.env.OPENAI_API_KEY) {
-      const draft = demoDraft(input);
+      const inferredIntake = demoIntake(input);
+      const draft = demoDraft(inferredIntake);
       return NextResponse.json({
+        intake: inferredIntake,
         draft,
         model: "demo-mode",
         elapsedMs: Date.now() - startedAt,
@@ -46,10 +57,12 @@ export async function POST(request: Request) {
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const transcript = await transcribe(openai, audio, input);
-    const draft = await generateDraft(openai, input, transcript);
+    const inferredIntake = await extractIntake(openai, input, transcript);
+    const draft = await generateDraft(openai, inferredIntake, transcript);
 
     return NextResponse.json({
-      draft: normalizeDraft({ ...draft, transcript }, input),
+      intake: inferredIntake,
+      draft: normalizeDraft({ ...draft, transcript }, inferredIntake),
       model: process.env.OPENAI_TEXT_MODEL || "gpt-5-mini",
       elapsedMs: Date.now() - startedAt
     });
@@ -62,7 +75,7 @@ export async function POST(request: Request) {
 }
 
 function readIntake(formData: FormData): IntakePayload {
-  return {
+  return normalizeIntake({
     accessKey: getText(formData, "accessKey"),
     buyerName: getText(formData, "buyerName"),
     email: getText(formData, "email"),
@@ -74,7 +87,7 @@ function readIntake(formData: FormData): IntakePayload {
     dedication: getText(formData, "dedication"),
     paymentReference: getText(formData, "paymentReference"),
     notes: getText(formData, "notes")
-  };
+  });
 }
 
 function getText(formData: FormData, key: keyof IntakePayload) {
@@ -105,23 +118,7 @@ async function readRequest(request: Request): Promise<{ input: IntakePayload; au
 }
 
 function readJsonIntake(input: Partial<IntakePayload>): IntakePayload {
-  return {
-    accessKey: cleanText(input.accessKey),
-    buyerName: cleanText(input.buyerName),
-    email: cleanText(input.email),
-    elderName: cleanText(input.elderName),
-    relationship: cleanText(input.relationship),
-    originPlace: cleanText(input.originPlace),
-    languageMix: cleanText(input.languageMix),
-    preserveWords: cleanText(input.preserveWords),
-    dedication: cleanText(input.dedication),
-    paymentReference: cleanText(input.paymentReference),
-    notes: cleanText(input.notes)
-  };
-}
-
-function cleanText(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  return normalizeIntake(input);
 }
 
 async function readStoredAudio(storageId: Id<"_storage">) {
@@ -149,6 +146,7 @@ async function readStoredAudio(storageId: Id<"_storage">) {
 
 async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
   const model = process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe";
+  const compressedAudio = await compressAudioLosslessly(audio);
   const prompt = [
     `This is a family interview for a keepsake storybook.`,
     `Transcribe in the original spoken language and script where possible. Do not translate into English.`,
@@ -158,7 +156,7 @@ async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
 
   try {
     const transcription = await openai.audio.transcriptions.create({
-      file: audio,
+      file: compressedAudio,
       model,
       prompt
     });
@@ -173,6 +171,110 @@ async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
     }
     throw error;
   }
+}
+
+async function compressAudioLosslessly(audio: File) {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "storybook-audio-"));
+  const inputPath = path.join(tempDir, `source-${randomUUID()}${extensionFor(audio)}`);
+  const outputPath = path.join(tempDir, "transcription.flac");
+
+  try {
+    await writeFile(inputPath, Buffer.from(await audio.arrayBuffer()));
+    await runFfmpeg([
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      inputPath,
+      "-map",
+      "0:a:0",
+      "-vn",
+      "-c:a",
+      "flac",
+      "-compression_level",
+      "12",
+      outputPath
+    ]);
+
+    const compressed = await readFile(outputPath);
+    return new File([compressed], replaceExtension(audio.name || "interview-audio", "flac"), {
+      type: "audio/flac"
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown compression failure.";
+    throw new Error(`Lossless audio compression failed before transcription. ${detail}`);
+  } finally {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+}
+
+function extensionFor(file: File) {
+  const extension = path.extname(file.name || "");
+  if (extension && /^[a-z0-9.]+$/i.test(extension)) {
+    return extension;
+  }
+
+  if (file.type.includes("wav")) {
+    return ".wav";
+  }
+  if (file.type.includes("mpeg") || file.type.includes("mp3")) {
+    return ".mp3";
+  }
+  if (file.type.includes("mp4")) {
+    return ".mp4";
+  }
+  if (file.type.includes("webm")) {
+    return ".webm";
+  }
+  if (file.type.includes("flac")) {
+    return ".flac";
+  }
+  return ".audio";
+}
+
+function replaceExtension(fileName: string, nextExtension: string) {
+  const parsed = path.parse(fileName);
+  return `${parsed.name || "interview-audio"}.${nextExtension}`;
+}
+
+async function runFfmpeg(args: string[]) {
+  const executable = process.env.FFMPEG_PATH || "ffmpeg";
+  const stderr: string[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(/* turbopackIgnore: true */ executable, args, {
+      stdio: ["ignore", "ignore", "pipe"]
+    });
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(stderr.join("").trim() || `ffmpeg exited with code ${code}.`));
+    });
+  });
+}
+
+async function extractIntake(openai: OpenAI, input: IntakePayload, transcript: string) {
+  const model = process.env.OPENAI_TEXT_MODEL || "gpt-5-mini";
+  const response = await openai.responses.create({
+    model,
+    instructions:
+      "You extract structured storybook intake fields from family-history transcripts. Return only valid JSON.",
+    input: buildIntakeExtractionPrompt(input, transcript)
+  });
+
+  const text = response.output_text;
+  if (!text) {
+    return normalizeIntake(input);
+  }
+
+  return mergeIntakeWithExtraction(input, JSON.parse(extractJson(text)));
 }
 
 async function generateDraft(openai: OpenAI, input: IntakePayload, transcript: string) {

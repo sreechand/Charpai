@@ -1,7 +1,22 @@
+import {
+  charpaiStorybookPrompt,
+  defaultCharpaiDraftDesign
+} from "@/lib/charpai-design-system";
+
 export type StorySection = {
   id: string;
   heading: string;
   body: string;
+};
+
+export type CharpaiDraftDesign = {
+  memoryWorldLabel: string;
+  accent: string;
+  deep: string;
+  handInk: string;
+  handStyle: string;
+  constructionNotes: string;
+  artifactForms: string[];
 };
 
 export type StorybookDraft = {
@@ -16,6 +31,7 @@ export type StorybookDraft = {
   stampSubject: string;
   stampMotifs: string[];
   photoCaptions: string[];
+  designSystem: CharpaiDraftDesign;
 };
 
 export type IntakePayload = {
@@ -30,6 +46,20 @@ export type IntakePayload = {
   dedication: string;
   paymentReference: string;
   notes: string;
+};
+
+export const blankIntake: IntakePayload = {
+  accessKey: "",
+  buyerName: "",
+  email: "",
+  elderName: "",
+  relationship: "",
+  originPlace: "",
+  languageMix: "",
+  preserveWords: "",
+  dedication: "",
+  paymentReference: "external",
+  notes: ""
 };
 
 export const interviewPrompts = [
@@ -77,7 +107,8 @@ export function emptyDraft(): StorybookDraft {
     illustrationBrief: "",
     stampSubject: "",
     stampMotifs: [],
-    photoCaptions: []
+    photoCaptions: [],
+    designSystem: defaultCharpaiDraftDesign()
   };
 }
 
@@ -102,15 +133,30 @@ export function demoDraft(input: Partial<IntakePayload> = {}): StorybookDraft {
     closingNote: `What ${elderName} wants remembered is not only the facts of a life, but the feeling of belonging to a family story.`,
     transcript:
       "Demo transcript placeholder. Add OPENAI_API_KEY to generate a real transcript from the uploaded audio.",
-    illustrationBrief: `A small rubber-stamp field note of ${originPlace}, using only a market arch, a coffee tumbler, a winding lane, and a family doorway on aged paper.`,
+    illustrationBrief: `A small rubber-stamp field note of ${originPlace}, using only a market arch, a coffee tumbler, a winding lane, and a family doorway on uncoated paper.`,
     stampSubject: `${originPlace} family memory`,
     stampMotifs: ["market arch", "filter coffee tumbler", "winding lane", "family doorway"],
     photoCaptions: [
       `${elderName} and the people who make this story worth saving.`,
       `A place, object, or face that brings the memory back.`,
       `A family photograph to sit beside the story.`
-    ]
+    ],
+    designSystem: defaultCharpaiDraftDesign(originPlace)
   };
+}
+
+export function demoIntake(input: Partial<IntakePayload> = {}): IntakePayload {
+  return mergeIntakeWithExtraction(input, {
+    buyerName: "Demo Buyer",
+    email: "demo@example.com",
+    elderName: "Lakshmi",
+    relationship: "Ajji",
+    originPlace: "Mysuru",
+    languageMix: "English + Hindi/Tamil/Telugu mixed",
+    preserveWords: "Lakshmi, Mysuru, Devaraja Market, filter coffee",
+    dedication: "For the grandchildren who should know where the family stories began.",
+    notes: "Demo-safe fallback for rehearsal."
+  });
 }
 
 export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {}): StorybookDraft {
@@ -148,26 +194,128 @@ export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {
       : fallback.stampMotifs,
     photoCaptions: Array.isArray(source.photoCaptions)
       ? source.photoCaptions.map((caption) => String(caption)).slice(0, 3)
-      : fallback.photoCaptions
+      : fallback.photoCaptions,
+    designSystem: normalizeCharpaiDraftDesign(source.designSystem, fallback.designSystem)
   };
 }
 
+export function normalizeIntake(value: unknown, fallback: Partial<IntakePayload> = {}): IntakePayload {
+  const source = value && typeof value === "object" ? (value as Partial<IntakePayload>) : {};
+  const base = { ...blankIntake, ...fallback };
+  const accessKey = stringOr(source.accessKey, base.accessKey || "");
+  const suppliedPaymentReference = stringOr(source.paymentReference, base.paymentReference || "");
+
+  return {
+    accessKey,
+    buyerName: stringOr(source.buyerName, base.buyerName || ""),
+    email: stringOr(source.email, base.email || ""),
+    elderName: stringOr(source.elderName, base.elderName || ""),
+    relationship: stringOr(source.relationship, base.relationship || ""),
+    originPlace: stringOr(source.originPlace, base.originPlace || ""),
+    languageMix: stringOr(source.languageMix, base.languageMix || ""),
+    preserveWords: stringOr(source.preserveWords, base.preserveWords || ""),
+    dedication: stringOr(source.dedication, base.dedication || ""),
+    paymentReference:
+      accessKey && (!suppliedPaymentReference || suppliedPaymentReference === "external")
+        ? `external:${accessKey}`
+        : suppliedPaymentReference || "external",
+    notes: stringOr(source.notes, base.notes || "")
+  };
+}
+
+export function mergeIntakeWithExtraction(
+  input: Partial<IntakePayload>,
+  extracted: Partial<IntakePayload>
+): IntakePayload {
+  const current = normalizeIntake(input);
+  const inferred = normalizeIntake(extracted);
+  const accessKey = current.accessKey || inferred.accessKey;
+  const merged: IntakePayload = {
+    accessKey,
+    buyerName: current.buyerName || inferred.buyerName,
+    email: current.email || inferred.email,
+    elderName: inferred.elderName || current.elderName,
+    relationship: inferred.relationship || current.relationship,
+    originPlace: inferred.originPlace || current.originPlace,
+    languageMix: inferred.languageMix || current.languageMix,
+    preserveWords: mergeCommaText(current.preserveWords, inferred.preserveWords),
+    dedication: inferred.dedication || current.dedication,
+    paymentReference: accessKey
+      ? `external:${accessKey}`
+      : current.paymentReference || inferred.paymentReference,
+    notes: mergeSentences(current.notes, inferred.notes)
+  };
+
+  return {
+    ...merged,
+    paymentReference: merged.paymentReference || "external"
+  };
+}
+
+export function buildIntakeExtractionPrompt(input: Partial<IntakePayload>, transcript: string) {
+  const supplied = normalizeIntake(input);
+
+  return `
+Extract the editable storybook intake fields from this family interview transcript.
+
+Current supplied fields, if any:
+${JSON.stringify(supplied, null, 2)}
+
+Transcript:
+"""${transcript}"""
+
+Return only valid JSON with this exact shape:
+{
+  "accessKey": "",
+  "buyerName": "",
+  "email": "",
+  "elderName": "",
+  "relationship": "",
+  "originPlace": "",
+  "languageMix": "",
+  "preserveWords": "",
+  "dedication": "",
+  "paymentReference": "",
+  "notes": ""
+}
+
+Rules:
+- Fill fields from the transcript wherever the transcript gives enough evidence.
+- elderName is the person whose life story is being made.
+- relationship is the family relationship term used by the buyer or child, such as Nani, Ajji, Thatha, Amma, Appa, grandmother, or uncle.
+- originPlace is the most specific home, childhood, or family place in the transcript.
+- languageMix should name the transcript's dominant language or language mix.
+- preserveWords should be a comma-separated list of important names, places, foods, relationship terms, objects, and phrases that must be preserved exactly.
+- dedication should be filled only when the transcript implies a dedication or family note.
+- buyerName and email should be filled only if explicitly spoken or present in supplied fields.
+- accessKey and paymentReference should usually come from supplied fields, not the transcript.
+- notes should briefly name uncertainty or missing fields that need human review.
+- Use an empty string for any field not supported by the transcript or supplied fields. Do not invent facts.
+`;
+}
+
 export function buildStoryPrompt(input: IntakePayload, transcript: string) {
+  const elderName = input.elderName || "the elder";
+  const relationship = input.relationship || "family elder";
+  const originPlace = input.originPlace || "home";
+
   return `
 Create a short keepsake storybook from a family interview transcript.
 
+${charpaiStorybookPrompt}
+
 Audience:
-- A child or younger family member reading about ${input.elderName}, their ${input.relationship}.
-- Buyer: ${input.buyerName} (${input.email}).
+- A child or younger family member reading about ${elderName}, their ${relationship}.
+- Buyer: ${input.buyerName || "not supplied"} (${input.email || "not supplied"}).
 
 Family details to preserve:
-- Elder name: ${input.elderName}
-- Relationship label: ${input.relationship}
-- Origin place: ${input.originPlace}
-- Languages in audio: ${input.languageMix}
-- Names and places to preserve exactly: ${input.preserveWords}
-- Dedication request: ${input.dedication}
-- Extra buyer notes: ${input.notes}
+- Elder name: ${elderName}
+- Relationship label: ${relationship}
+- Origin place: ${originPlace}
+- Languages in audio: ${input.languageMix || "infer from transcript"}
+- Names and places to preserve exactly: ${input.preserveWords || "infer from transcript"}
+- Dedication request: ${input.dedication || "infer if present"}
+- Extra buyer notes: ${input.notes || "none supplied"}
 
 Interview prompts the child may have asked:
 ${interviewPrompts.map((prompt, index) => `${index + 1}. ${prompt}`).join("\n")}
@@ -190,7 +338,16 @@ Return only valid JSON with this exact shape:
   "illustrationBrief": "one sentence visual direction for a small rubber-stamp field-note impression, no private data beyond names/places supplied",
   "stampSubject": "the most distinctive place, object, food, room, landscape, or memory fragment to illustrate",
   "stampMotifs": ["3 to 6 essential visual forms only, no labels, no people, no clutter"],
-  "photoCaptions": ["caption 1", "caption 2", "caption 3"]
+  "photoCaptions": ["caption 1", "caption 2", "caption 3"],
+  "designSystem": {
+    "memoryWorldLabel": "place/time/artifact label for the memory world",
+    "accent": "one Charpai hex accent chosen from transcript evidence",
+    "deep": "one Charpai hex deep color chosen from transcript evidence",
+    "handInk": "one Charpai hex handwriting ink color",
+    "handStyle": "short narrator handwriting/material description",
+    "constructionNotes": "one sentence describing the physical book construction",
+    "artifactForms": ["3 to 5 physical artifacts or page forms"]
+  }
 }
 
 Rules:
@@ -204,9 +361,67 @@ Rules:
 - Avoid melodrama. Make it feel like a family keepsake, not an obituary.
 - For stampSubject and stampMotifs, identify the minimum visual information needed for recognition: one landmark, object silhouette, food form, room arrangement, landscape contour, or family object. Do not make a catalogue.
 - Exclude people, crowds, vehicles, dense buildings, decorative clutter, slogans, captions, dates, labels and watermarks from the illustration concept.
+- For designSystem, choose only colors from the Charpai palette unless the transcript provides a specific color that is essential evidence.
+- designSystem.memoryWorldLabel must be specific to the transcript, not a generic phrase such as "family memories".
+- designSystem.constructionNotes should name a physical page construction that fits the transcript, such as mounted photograph, document reverse, tracing overlay, route strip, recipe card, or field note.
 `;
 }
 
 function stringOr(value: unknown, fallback: string) {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function mergeCommaText(first: string, second: string) {
+  const seen = new Set<string>();
+  return [first, second]
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (!value || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .join(", ");
+}
+
+function mergeSentences(first: string, second: string) {
+  if (!first) {
+    return second;
+  }
+  if (!second || first.toLowerCase().includes(second.toLowerCase())) {
+    return first;
+  }
+  return `${first} ${second}`;
+}
+
+function normalizeCharpaiDraftDesign(
+  value: unknown,
+  fallback: CharpaiDraftDesign
+): CharpaiDraftDesign {
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+
+  const source = value as Partial<CharpaiDraftDesign>;
+  return {
+    memoryWorldLabel: stringOr(source.memoryWorldLabel, fallback.memoryWorldLabel),
+    accent: validHexOr(source.accent, fallback.accent),
+    deep: validHexOr(source.deep, fallback.deep),
+    handInk: validHexOr(source.handInk, fallback.handInk),
+    handStyle: stringOr(source.handStyle, fallback.handStyle),
+    constructionNotes: stringOr(source.constructionNotes, fallback.constructionNotes),
+    artifactForms: Array.isArray(source.artifactForms)
+      ? source.artifactForms
+          .map((form) => String(form).trim())
+          .filter(Boolean)
+          .slice(0, 5)
+      : fallback.artifactForms
+  };
+}
+
+function validHexOr(value: unknown, fallback: string) {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
 }

@@ -1,21 +1,43 @@
 :root {
-  --canvas: #f4f0e7;
-  --paper: #fffaf0;
-  --paper-deep: #f8edda;
-  --ink: #241b17;
-  --ink-soft: #625044;
-  --ink-muted: #8b7666;
-  --sepia: #a85f37;
-  --marigold: #d79a2b;
-  --leaf: #506d57;
-  --rose: #b76f68;
-  --slate-ink: #536b75;
-  --line: rgba(52, 35, 24, 0.14);
-  --line-strong: rgba(52, 35, 24, 0.24);
-  --focus: rgba(168, 95, 55, 0.35);
+  --canvas: #f4f0e5;
+  --paper: #f4f0e5;
+  --paper-deep: #ede7d8;
+  --paper-edge: #e2dac6;
+  --paper-mount: #e9e2d0;
+  --ink: #241f1b;
+  --ink-soft: #554c42;
+  --ink-muted: #8a8074;
+  --ink-rule: #cfc6b2;
+  --oxide: #9c4a2f;
+  --penblue: #2c3e5c;
+  --banyan: #4f5f3c;
+  --wrappergold: #d7a84a;
+  --uniform: #3f5147;
+  --teak: #6b4a2b;
+  --testcard: #2e6c79;
+  --carbon: #6a4e7c;
+  --chrome: #8c9196;
+  --memory-accent: var(--oxide);
+  --memory-deep: var(--banyan);
+  --hand-ink: var(--penblue);
+  --line: rgba(36, 31, 27, 0.14);
+  --line-strong: rgba(36, 31, 27, 0.24);
+  --focus: rgba(44, 62, 92, 0.28);
   --danger: #9b2f28;
-  --success: #366344;
-  --shadow: 0 0 0 1px rgba(52, 35, 24, 0.06), 0 18px 50px rgba(72, 44, 25, 0.11);
+  --success: var(--uniform);
+  --shadow-mounted: 0 1px 1px rgba(36, 31, 27, 0.1);
+  --shadow-loose: 0 2px 5px -1px rgba(36, 31, 27, 0.16), 0 10px 20px -12px rgba(36, 31, 27, 0.22);
+  --shadow-lifted: 0 10px 22px -8px rgba(36, 31, 27, 0.3), 0 30px 55px -30px rgba(36, 31, 27, 0.4);
+  --shadow: var(--shadow-loose);
+  --space-touch: 8px;
+  --space-object: 16px;
+  --space-thought: 32px;
+  --space-scene: clamp(48px, 7vw, 80px);
+  --space-breath: clamp(72px, 11vw, 128px);
+  --space-silence: clamp(120px, 20vw, 240px);
+  --font-story: "Gentium Book Plus", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-ui: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-hand: Caveat, Kalam, "Bradley Hand", cursive;
   --radius-small: 7px;
   --radius: 8px;
   --radius-large: 14px;
@@ -29,8 +51,9 @@ html {
   min-height: 100%;
   background: var(--canvas);
   color: var(--ink);
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-family: var(--font-story);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -59,7 +82,7 @@ textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-small);
-  background: rgba(255, 250, 240, 0.68);
+  background: rgba(237, 231, 216, 0.68);
   color: var(--ink);
   outline: none;
   transition: border-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -69,13 +92,22 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: var(--sepia);
+  border-color: var(--memory-accent);
   box-shadow: 0 0 0 4px var(--focus);
-  background: #fffdf7;
+  background: rgba(244, 240, 229, 0.96);
 }
 
 textarea {
   resize: vertical;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--wrappergold) 28%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--hand-ink);
+  outline-offset: 3px;
 }
 
 .app-shell {
@@ -114,8 +146,8 @@ textarea {
 
 .eyebrow {
   margin: 0;
-  color: var(--sepia);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--memory-accent);
+  font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -138,10 +170,10 @@ textarea {
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 250, 240, 0.66);
+  background: rgba(244, 240, 229, 0.72);
   color: var(--ink-soft);
   padding: 7px 11px;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 650;
 }
@@ -168,7 +200,7 @@ textarea {
 .transcript-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius-large);
-  background: rgba(255, 250, 240, 0.74);
+  background: rgba(244, 240, 229, 0.78);
   box-shadow: var(--shadow);
 }
 
@@ -190,7 +222,7 @@ textarea {
 .editor-toolbar h2,
 .transcript-panel h3 {
   margin: 4px 0 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 17px;
   font-weight: 730;
   line-height: 1.2;
@@ -217,7 +249,7 @@ textarea {
 .access-box strong {
   display: block;
   margin: 4px 0 2px;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 20px;
   font-weight: 760;
 }
@@ -226,7 +258,7 @@ textarea {
 .upload-card small,
 .field-label {
   color: var(--ink-muted);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 520;
 }
@@ -242,9 +274,24 @@ textarea {
   gap: 6px;
 }
 
+.field-section-heading {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.field-section-heading span {
+  color: var(--ink-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 520;
+  line-height: 1.35;
+}
+
 .field span {
   color: var(--ink-soft);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 680;
 }
@@ -253,7 +300,7 @@ textarea {
 .field textarea,
 .transcript-panel textarea {
   padding: 10px 11px;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -271,7 +318,7 @@ textarea {
   min-height: 120px;
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
-  background: rgba(248, 237, 218, 0.68);
+  background: rgba(237, 231, 216, 0.74);
   padding: 14px;
   color: var(--ink-soft);
   transition: border-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -279,13 +326,13 @@ textarea {
 }
 
 .upload-card:hover {
-  border-color: var(--sepia);
-  background: rgba(248, 237, 218, 0.95);
+  border-color: var(--memory-accent);
+  background: rgba(237, 231, 216, 0.96);
 }
 
 .upload-card span {
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 720;
   word-break: break-word;
@@ -304,7 +351,7 @@ textarea {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(255, 253, 247, 0.68);
+  background: rgba(244, 240, 229, 0.68);
   padding: 12px;
 }
 
@@ -312,8 +359,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--sepia);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--memory-accent);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 760;
 }
@@ -345,7 +392,7 @@ textarea {
   gap: 8px;
   border-radius: var(--radius-small);
   padding: 10px 14px;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 760;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -360,18 +407,18 @@ textarea {
 
 .primary-button {
   border: 1px solid rgba(74, 44, 28, 0.22);
-  background: var(--sepia);
-  color: #fffaf0;
+  background: var(--memory-accent);
+  color: var(--paper);
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #934f2e;
+  background: var(--teak);
 }
 
 .secondary-button,
 .export-button {
   border: 1px solid var(--line);
-  background: rgba(255, 253, 247, 0.84);
+  background: rgba(244, 240, 229, 0.84);
   color: var(--ink);
 }
 
@@ -387,7 +434,7 @@ textarea {
   border-radius: var(--radius);
   padding: 11px 12px;
   color: var(--ink-soft);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -421,10 +468,10 @@ textarea {
   border-radius: 12px;
   background: linear-gradient(
     90deg,
-    rgba(36, 27, 23, 0.05) 0,
+    rgba(36, 31, 27, 0.05) 0,
     transparent 18%,
     transparent 82%,
-    rgba(36, 27, 23, 0.04) 100%
+    rgba(36, 31, 27, 0.04) 100%
   );
   padding: 24px;
 }
@@ -437,16 +484,16 @@ textarea {
   gap: 0;
   width: min(100%, 980px);
   min-height: 940px;
-  border: 1px solid rgba(52, 35, 24, 0.16);
+  border: 1px solid var(--line);
   border-radius: 6px;
   background:
-    radial-gradient(circle at 18% 22%, rgba(80, 67, 52, 0.11) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 72% 28%, rgba(168, 95, 55, 0.09) 0 1px, transparent 1.4px),
-    radial-gradient(circle at 34% 78%, rgba(80, 109, 87, 0.08) 0 0.8px, transparent 1.4px),
-    linear-gradient(100deg, rgba(255, 255, 255, 0.38), rgba(248, 237, 218, 0.2) 42%, rgba(120, 83, 48, 0.08)),
+    radial-gradient(circle at 18% 22%, rgba(36, 31, 27, 0.09) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 72% 28%, color-mix(in srgb, var(--memory-accent) 12%, transparent) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 34% 78%, color-mix(in srgb, var(--memory-deep) 11%, transparent) 0 0.8px, transparent 1.4px),
+    linear-gradient(100deg, rgba(255, 255, 255, 0.36), rgba(237, 231, 216, 0.28) 42%, rgba(36, 31, 27, 0.06)),
     var(--paper);
   background-size: 18px 18px, 26px 26px, 34px 34px, auto, auto;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset, 0 20px 45px rgba(72, 44, 25, 0.16);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.42) inset, var(--shadow-lifted);
   overflow: hidden;
 }
 
@@ -456,7 +503,7 @@ textarea {
   z-index: -1;
   background:
     linear-gradient(82deg, transparent 0 12%, rgba(105, 77, 48, 0.04) 13%, transparent 14% 100%),
-    repeating-linear-gradient(0deg, rgba(60, 45, 32, 0.035) 0 1px, transparent 1px 7px);
+    repeating-linear-gradient(0deg, rgba(36, 31, 27, 0.035) 0 1px, transparent 1px 7px);
   content: "";
   opacity: 0.62;
   pointer-events: none;
@@ -471,8 +518,8 @@ textarea {
   background: linear-gradient(
     180deg,
     transparent,
-    rgba(52, 35, 24, 0.18) 16%,
-    rgba(52, 35, 24, 0.08) 84%,
+    rgba(36, 31, 27, 0.18) 16%,
+    rgba(36, 31, 27, 0.08) 84%,
     transparent
   );
   content: "";
@@ -490,11 +537,11 @@ textarea {
   align-content: start;
   gap: 30px;
   min-height: 940px;
-  background: rgba(255, 250, 240, 0.18);
+  background: color-mix(in srgb, var(--memory-deep) 7%, transparent);
 }
 
 .text-page {
-  background: rgba(255, 250, 240, 0.32);
+  background: rgba(244, 240, 229, 0.42);
 }
 
 .book-cover {
@@ -522,16 +569,15 @@ textarea {
 .book input:focus,
 .book textarea:focus {
   border-color: transparent;
-  box-shadow: inset 0 -2px 0 rgba(168, 95, 55, 0.28);
-  background: rgba(255, 250, 240, 0.32);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--memory-accent) 34%, transparent);
+  background: rgba(244, 240, 229, 0.44);
 }
 
 .book-title {
   min-height: 112px;
   padding: 0;
   text-align: center;
-  font-family: ui-serif, Georgia, "Noto Serif Devanagari", "Noto Serif Tamil", "Noto Serif Telugu",
-    "Times New Roman", serif;
+  font-family: var(--font-story);
   font-size: 42px;
   font-weight: 650;
   line-height: 1.08;
@@ -566,8 +612,8 @@ textarea {
   position: relative;
   width: min(82%, 230px);
   margin: 0;
-  background: #fffdf7;
-  box-shadow: 0 12px 28px rgba(72, 44, 25, 0.15);
+  background: rgba(244, 240, 229, 0.96);
+  box-shadow: var(--shadow-loose);
   padding: 10px 10px 28px;
 }
 
@@ -606,8 +652,7 @@ textarea {
 .polaroid figcaption {
   margin-top: 10px;
   color: var(--ink-muted);
-  font-family: ui-serif, Georgia, "Noto Serif Devanagari", "Noto Serif Tamil", "Noto Serif Telugu",
-    "Times New Roman", serif;
+  font-family: var(--font-story);
   font-size: 12px;
   line-height: 1.35;
   text-align: center;
@@ -619,9 +664,9 @@ textarea {
   aspect-ratio: 1;
   justify-self: center;
   background:
-    radial-gradient(circle at 20% 30%, rgba(52, 35, 24, 0.1) 0 0.8px, transparent 1.5px),
-    radial-gradient(circle at 76% 70%, rgba(168, 95, 55, 0.08) 0 0.8px, transparent 1.4px),
-    linear-gradient(105deg, rgba(255, 253, 247, 0.52), rgba(248, 237, 218, 0.2)),
+    radial-gradient(circle at 20% 30%, rgba(36, 31, 27, 0.1) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 76% 70%, color-mix(in srgb, var(--memory-accent) 12%, transparent) 0 0.8px, transparent 1.4px),
+    linear-gradient(105deg, rgba(255, 255, 255, 0.35), rgba(237, 231, 216, 0.26)),
     var(--paper);
   background-size: 19px 19px, 31px 31px, auto, auto;
 }
@@ -630,7 +675,7 @@ textarea {
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(88deg, rgba(52, 35, 24, 0.035) 0 1px, transparent 1px 9px),
+    repeating-linear-gradient(88deg, rgba(36, 31, 27, 0.035) 0 1px, transparent 1px 9px),
     radial-gradient(circle at 64% 38%, rgba(72, 44, 25, 0.06), transparent 14%);
   content: "";
   pointer-events: none;
@@ -655,34 +700,34 @@ textarea {
 }
 
 .stamp-dark {
-  stroke: rgba(36, 27, 23, 0.78);
+  stroke: color-mix(in srgb, var(--ink) 84%, var(--hand-ink));
 }
 
 .stamp-ochre {
-  fill: rgba(215, 154, 43, 0.15);
-  stroke: rgba(159, 108, 36, 0.62);
+  fill: color-mix(in srgb, var(--wrappergold) 18%, transparent);
+  stroke: color-mix(in srgb, var(--wrappergold) 70%, var(--ink));
   transform: translate(1px, -1px);
 }
 
 .stamp-brick {
-  fill: rgba(183, 111, 104, 0.14);
-  stroke: rgba(143, 61, 50, 0.58);
+  fill: color-mix(in srgb, var(--memory-accent) 16%, transparent);
+  stroke: color-mix(in srgb, var(--memory-accent) 64%, var(--ink));
   transform: translate(-1px, 1px);
 }
 
 .stamp-green {
-  fill: rgba(80, 109, 87, 0.13);
-  stroke: rgba(61, 92, 67, 0.62);
+  fill: color-mix(in srgb, var(--memory-deep) 14%, transparent);
+  stroke: color-mix(in srgb, var(--memory-deep) 68%, var(--ink));
   transform: translate(1px, 1px);
 }
 
 .stamp-blue {
-  stroke: rgba(83, 107, 117, 0.62);
+  stroke: color-mix(in srgb, var(--hand-ink) 70%, var(--ink));
   transform: translate(-1px, -1px);
 }
 
 .stamp-ghost {
-  stroke: rgba(168, 95, 55, 0.16);
+  stroke: color-mix(in srgb, var(--memory-accent) 20%, transparent);
   stroke-width: 3;
 }
 
@@ -692,9 +737,9 @@ textarea {
   gap: 8px;
   align-items: start;
   margin: 24px 0;
-  border: 1px solid rgba(215, 154, 43, 0.26);
+  border: 1px solid color-mix(in srgb, var(--wrappergold) 36%, transparent);
   border-radius: 6px;
-  background: rgba(215, 154, 43, 0.1);
+  background: color-mix(in srgb, var(--wrappergold) 14%, transparent);
   padding: 10px 12px;
 }
 
@@ -702,7 +747,7 @@ textarea {
   min-height: 40px;
   padding: 0;
   color: var(--ink-soft);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -720,7 +765,7 @@ textarea {
 .story-section-heading {
   min-height: 68px;
   padding: 0;
-  color: var(--leaf);
+  color: var(--memory-deep);
   font-size: 28px;
   font-weight: 650;
   line-height: 1.16;
@@ -738,13 +783,13 @@ textarea {
 
 .closing-note {
   margin-top: 12px;
-  border-top: 2px solid rgba(168, 95, 55, 0.24);
+  border-top: 2px solid color-mix(in srgb, var(--memory-accent) 28%, transparent);
   padding-top: 22px;
 }
 
 .closing-note textarea {
   min-height: 120px;
-  color: var(--sepia);
+  color: var(--memory-accent);
   font-style: italic;
 }
 
@@ -755,7 +800,7 @@ textarea {
   min-height: 560px;
   border: 1px dashed var(--line-strong);
   border-radius: 6px;
-  background: rgba(255, 250, 240, 0.76);
+  background: rgba(244, 240, 229, 0.76);
   padding: 40px;
   text-align: center;
 }
@@ -767,7 +812,7 @@ textarea {
   height: 82px;
   border-radius: 50%;
   background: var(--paper-deep);
-  color: var(--sepia);
+  color: var(--memory-accent);
 }
 
 .empty-book h2 {

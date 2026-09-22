@@ -13,13 +13,15 @@ import {
   Sparkles,
   Upload
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useEvidence } from "@/app/providers";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
 import {
+  blankIntake,
   demoDraft,
+  demoIntake,
   emptyDraft,
   interviewPrompts,
   type IntakePayload,
@@ -28,21 +30,12 @@ import {
 } from "@/lib/storybook";
 
 const initialIntake: IntakePayload = {
-  accessKey: "",
-  buyerName: "",
-  email: "",
-  elderName: "",
-  relationship: "Nani",
-  originPlace: "",
-  languageMix: "English + Hindi/Tamil/Telugu mixed",
-  preserveWords: "",
-  dedication: "",
-  paymentReference: "external",
-  notes: ""
+  ...blankIntake
 };
 
 type GenerateResponse = {
   draft?: StorybookDraft;
+  intake?: IntakePayload;
   error?: string;
   warning?: string;
   model?: string;
@@ -65,35 +58,22 @@ export function StorybookApp() {
   const accessKey = intake.accessKey || urlAccessKey;
   const paymentReference = accessKey ? `external:${accessKey}` : "external";
 
-  const requiredMissing = useMemo(
-    () =>
-      [
-        intake.buyerName,
-        intake.email,
-        intake.elderName,
-        intake.relationship,
-        intake.originPlace,
-        accessKey
-      ].some((value) => !value.trim()),
-    [accessKey, intake]
+  const fieldsNeedReview = useMemo(
+    () => [intake.elderName, intake.relationship, intake.originPlace].some((value) => !value.trim()),
+    [intake.elderName, intake.originPlace, intake.relationship]
   );
 
-  const canGenerate = Boolean(audio) && !requiredMissing && status !== "generating";
+  const canGenerate = Boolean(audio) && status !== "generating";
 
   async function handleGenerate() {
     setMessage("");
     setWarning("");
+    runIdRef.current = null;
 
     const audioError = validateAudioFile(audio);
     if (audioError) {
       setStatus("failed");
       setMessage(audioError);
-      return;
-    }
-
-    if (requiredMissing) {
-      setStatus("failed");
-      setMessage("Open your private story link, then fill the buyer, elder, place, and relationship fields.");
       return;
     }
 
@@ -109,25 +89,7 @@ export function StorybookApp() {
       return;
     }
 
-    const runId = await evidence.createRun({
-      accessKey,
-      buyerName: intake.buyerName,
-      email: intake.email,
-      elderName: intake.elderName,
-      relationship: intake.relationship,
-      originPlace: intake.originPlace,
-      languageMix: intake.languageMix,
-      paymentReference,
-      paymentStatus: "received",
-      audioStorageId: audioStorageId || undefined,
-      hasAudio: Boolean(audio),
-      photoCount: photos.length
-    });
-    runIdRef.current = runId;
-
     try {
-      await evidence.markGenerating(runId);
-
       const requestPayload = { input: { ...intake, accessKey, paymentReference }, audioStorageId };
       const fallbackBody = new FormData();
       Object.entries(requestPayload.input).forEach(([key, value]) => fallbackBody.append(key, value));
@@ -149,21 +111,46 @@ export function StorybookApp() {
         throw new Error(result.error || "The storybook could not be generated.");
       }
 
+      const generatedIntake = result.intake || requestPayload.input;
       setDraft(result.draft);
+      setIntake(generatedIntake);
       setWarning(result.warning || "");
       setStatus("ready");
       setMessage(
         `${result.model || "model"} created the draft in ${Math.max(
           1,
           Math.round((result.elapsedMs || 1000) / 1000)
-        )}s. Review names and places before export.`
+        )}s. Review the extracted fields and storybook before export.`
       );
-      await evidence.markDraftReady(runId, result.draft.title);
+
+      try {
+        const runId = await evidence.createRun({
+          accessKey: generatedIntake.accessKey || accessKey,
+          buyerName: generatedIntake.buyerName,
+          email: generatedIntake.email,
+          elderName: generatedIntake.elderName,
+          relationship: generatedIntake.relationship,
+          originPlace: generatedIntake.originPlace,
+          languageMix: generatedIntake.languageMix,
+          paymentReference: generatedIntake.paymentReference || paymentReference,
+          paymentStatus: "received",
+          audioStorageId: audioStorageId || undefined,
+          hasAudio: Boolean(audio),
+          photoCount: photos.length
+        });
+        runIdRef.current = runId;
+        await evidence.markDraftReady(runId, result.draft.title);
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "The run could not be saved.";
+        setWarning((current) => [current, text].filter(Boolean).join(" "));
+      }
     } catch (error) {
       const text = error instanceof Error ? error.message : "The storybook could not be generated.";
       setStatus("failed");
       setMessage(text);
-      await evidence.markFailed(runId, text);
+      if (runIdRef.current) {
+        await evidence.markFailed(runIdRef.current, text);
+      }
     }
   }
 
@@ -200,23 +187,15 @@ export function StorybookApp() {
   }
 
   function loadDemo() {
-    const seeded = {
-      ...initialIntake,
-      buyerName: "Demo Buyer",
-      email: "demo@example.com",
-      elderName: "Lakshmi",
-      relationship: "Ajji",
-      originPlace: "Mysuru",
+    const seeded = demoIntake({
+      ...intake,
       accessKey: "demo-rehearsal",
-      preserveWords: "Lakshmi, Mysuru, Devaraja Market, filter coffee",
-      dedication: "For the grandchildren who should know where the family stories began.",
-      paymentReference: "external:demo-rehearsal",
-      notes: "Demo-safe fallback for rehearsal."
-    };
+      paymentReference: "external:demo-rehearsal"
+    });
     setIntake(seeded);
     setDraft(demoDraft(seeded));
     setStatus("ready");
-    setMessage("Demo draft loaded. Use this only for rehearsal if live generation is unavailable.");
+    setMessage("Demo preview loaded. Review the extracted fields and storybook before export.");
   }
 
   return (
@@ -247,8 +226,8 @@ export function StorybookApp() {
         <aside className="intake-panel screen-only" aria-label="Storybook intake">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Intake</p>
-              <h2>Recording and family details</h2>
+              <p className="eyebrow">{draft.sections.length ? "Review" : "Audio intake"}</p>
+              <h2>{draft.sections.length ? "Extracted family details" : "Upload audio for preview"}</h2>
             </div>
           </div>
 
@@ -276,6 +255,46 @@ export function StorybookApp() {
               }))
             }
           />
+
+          <div className="upload-zone">
+            <label className="upload-card">
+              <Upload size={22} aria-hidden />
+              <span>{audio ? audio.name : "Upload interview audio"}</span>
+              <small>mp3, m4a, wav, mp4 or webm. Keep it under 100 MB.</small>
+              <input
+                type="file"
+                accept="audio/*,video/mp4,.m4a,.mp3,.wav,.webm"
+                onChange={(event) => setAudio(event.target.files?.[0] || null)}
+              />
+            </label>
+            <label className="upload-card">
+              <ImagePlus size={22} aria-hidden />
+              <span>{photos.length ? `${photos.length} photo previewed` : "Optional photos"}</span>
+              <small>Up to 3 family photos for the storybook pages.</small>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => handlePhotoFiles(event.target.files)}
+              />
+            </label>
+          </div>
+
+          <div className="field-section-heading">
+            <p className="eyebrow">{draft.sections.length ? "Extracted fields" : "Details"}</p>
+            <span>
+              {draft.sections.length
+                ? "Correct anything the transcript missed."
+                : "These can be left blank until the audio is processed."}
+            </span>
+          </div>
+
+          {draft.sections.length && fieldsNeedReview ? (
+            <div className="notice warning">
+              <AlertTriangle size={18} aria-hidden />
+              <span>Some core fields are still blank. Review the transcript and fill them before export.</span>
+            </div>
+          ) : null}
 
           <div className="field-grid">
             <TextField
@@ -331,30 +350,6 @@ export function StorybookApp() {
             onChange={(value) => updateIntake("notes", value)}
           />
 
-          <div className="upload-zone">
-            <label className="upload-card">
-              <Upload size={22} aria-hidden />
-              <span>{audio ? audio.name : "Upload interview audio"}</span>
-              <small>mp3, m4a, wav, mp4 or webm. Keep it under 100 MB.</small>
-              <input
-                type="file"
-                accept="audio/*,video/mp4,.m4a,.mp3,.wav,.webm"
-                onChange={(event) => setAudio(event.target.files?.[0] || null)}
-              />
-            </label>
-            <label className="upload-card">
-              <ImagePlus size={22} aria-hidden />
-              <span>{photos.length ? `${photos.length} photo previewed` : "Optional photos"}</span>
-              <small>Up to 3 family photos for the storybook pages.</small>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(event) => handlePhotoFiles(event.target.files)}
-              />
-            </label>
-          </div>
-
           <div className="prompt-block">
             <div className="prompt-title">
               <Sparkles size={16} aria-hidden />
@@ -383,7 +378,7 @@ export function StorybookApp() {
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} aria-hidden /> Generate storybook
+                  <Sparkles size={18} aria-hidden /> Generate preview
                 </>
               )}
             </button>
@@ -483,7 +478,7 @@ function StorybookEditor({
   onSectionChange: (id: string, patch: Partial<StorySection>) => void;
 }) {
   return (
-    <article className="book">
+    <article className="book" style={getDraftDesignStyle(draft)}>
       <section className="visual-page" aria-label="Storybook illustration page">
         <StampPoster draft={draft} />
         {photos.length ? <PolaroidPhotos draft={draft} photos={photos} /> : null}
@@ -609,7 +604,10 @@ function deriveStampKinds(draft: StorybookDraft): StampKind[] {
     ...(draft.stampMotifs || []),
     draft.illustrationBrief,
     draft.title,
-    draft.subtitle
+    draft.subtitle,
+    draft.designSystem.memoryWorldLabel,
+    draft.designSystem.constructionNotes,
+    ...draft.designSystem.artifactForms
   ]
     .join(" ")
     .toLowerCase();
@@ -698,6 +696,14 @@ function renderStampShape(kind: StampKind, index: number) {
         </g>
       );
   }
+}
+
+function getDraftDesignStyle(draft: StorybookDraft) {
+  return {
+    "--memory-accent": draft.designSystem.accent,
+    "--memory-deep": draft.designSystem.deep,
+    "--hand-ink": draft.designSystem.handInk
+  } as CSSProperties;
 }
 
 function AutoSizeTextArea({
