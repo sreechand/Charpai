@@ -1,26 +1,32 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 export const createRun = mutation({
   args: {
-    accessKey: v.optional(v.string()),
-    buyerName: v.string(),
-    email: v.string(),
+    buyerName: v.optional(v.string()),
+    email: v.optional(v.string()),
     elderName: v.string(),
     relationship: v.string(),
     originPlace: v.string(),
     languageMix: v.string(),
-    paymentReference: v.string(),
-    paymentStatus: v.union(v.literal("pending"), v.literal("received")),
     audioStorageId: v.optional(v.id("_storage")),
     hasAudio: v.boolean(),
     photoCount: v.number()
   },
   returns: v.id("runs"),
   handler: async (ctx, args) => {
+    const userId = await requireAuthUserId(ctx);
+    const user = await ctx.db.get(userId);
     const now = Date.now();
     return await ctx.db.insert("runs", {
       ...args,
+      userId,
+      buyerName: args.buyerName || user?.name || "",
+      email: args.email || user?.email || "",
+      paymentStatus: "received",
       status: "created",
       createdAt: now,
       updatedAt: now
@@ -34,6 +40,7 @@ export const markGenerating = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireOwnedRun(ctx, args.id);
     await ctx.db.patch(args.id, {
       status: "generating",
       updatedAt: Date.now()
@@ -49,6 +56,7 @@ export const markDraftReady = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireOwnedRun(ctx, args.id);
     await ctx.db.patch(args.id, {
       status: "draft_ready",
       title: args.title,
@@ -65,6 +73,7 @@ export const markExported = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireOwnedRun(ctx, args.id);
     await ctx.db.patch(args.id, {
       status: "exported",
       title: args.title,
@@ -81,6 +90,7 @@ export const markFailed = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireOwnedRun(ctx, args.id);
     await ctx.db.patch(args.id, {
       status: "failed",
       error: args.error,
@@ -89,3 +99,23 @@ export const markFailed = mutation({
     return null;
   }
 });
+
+async function requireAuthUserId(ctx: MutationCtx) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    throw new Error("Sign in to continue.");
+  }
+  return userId;
+}
+
+async function requireOwnedRun(ctx: MutationCtx, id: Id<"runs">) {
+  const userId = await requireAuthUserId(ctx);
+  const run = await ctx.db.get(id);
+  if (!run) {
+    throw new Error("Storybook run not found.");
+  }
+  if (run.userId !== userId) {
+    throw new Error("You do not have access to this storybook run.");
+  }
+  return run;
+}

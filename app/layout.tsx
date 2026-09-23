@@ -5,9 +5,8 @@ import { Providers } from "@/app/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Family Storybook Maker",
-  description:
-    "Turn a grandparent or parent interview recording into an editable keepsake storybook PDF."
+  title: "Charpai",
+  description: "Turn a family interview recording into an editable keepsake storybook PDF."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

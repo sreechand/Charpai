@@ -7,21 +7,24 @@ import {
   useMemo,
   type ReactNode
 } from "react";
-import { ConvexProvider, ConvexReactClient, useMutation } from "convex/react";
+import {
+  ConvexAuthProvider,
+  useAuthActions,
+  useAuthToken,
+  useConvexAuth
+} from "@convex-dev/auth/react";
+import { ConvexReactClient, useMutation } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
 type CreateRunInput = {
-  accessKey?: string;
-  buyerName: string;
-  email: string;
+  buyerName?: string;
+  email?: string;
   elderName: string;
   relationship: string;
   originPlace: string;
   languageMix: string;
-  paymentReference: string;
-  paymentStatus: "pending" | "received";
   audioStorageId?: Id<"_storage">;
   hasAudio: boolean;
   photoCount: number;
@@ -37,20 +40,36 @@ type EvidenceContextValue = {
   markFailed: (id: string, error: string) => Promise<void>;
 };
 
+type AuthContextValue = {
+  status: "loading" | "authenticated" | "unauthenticated" | "unavailable";
+  authToken: string | null;
+  signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+};
+
 const EvidenceContext = createContext<EvidenceContextValue | null>(null);
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 const convexClient = convexUrl ? new ConvexReactClient(convexUrl) : null;
 
 export function Providers({ children }: { children: ReactNode }) {
   if (!convexClient) {
-    return <LocalEvidenceProvider>{children}</LocalEvidenceProvider>;
+    return (
+      <UnavailableAuthProvider>
+        <LocalEvidenceProvider>{children}</LocalEvidenceProvider>
+      </UnavailableAuthProvider>
+    );
   }
 
   return (
-    <ConvexProvider client={convexClient}>
-      <ConvexEvidenceProvider>{children}</ConvexEvidenceProvider>
-    </ConvexProvider>
+    <ConvexAuthProvider client={convexClient}>
+      <ConvexAuthBridge>
+        <ConvexEvidenceProvider>{children}</ConvexEvidenceProvider>
+      </ConvexAuthBridge>
+    </ConvexAuthProvider>
   );
 }
 
@@ -62,8 +81,54 @@ export function useEvidence() {
   return value;
 }
 
+export function useAuthSession() {
+  const value = useContext(AuthContext);
+  if (!value) {
+    throw new Error("useAuthSession must be used inside Providers.");
+  }
+  return value;
+}
+
+function ConvexAuthBridge({ children }: { children: ReactNode }) {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const authToken = useAuthToken();
+  const { signIn, signOut } = useAuthActions();
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      status: isLoading ? "loading" : isAuthenticated ? "authenticated" : "unauthenticated",
+      authToken,
+      signInWithGoogle: async () => {
+        const result = await signIn("google", { redirectTo: "/" });
+        if (result.redirect) {
+          window.location.href = result.redirect.toString();
+        }
+      },
+      signInWithEmail: async (email, password) => {
+        await signIn("password", {
+          flow: "signIn",
+          email: email.trim().toLowerCase(),
+          password
+        });
+      },
+      signUpWithEmail: async (email, password) => {
+        await signIn("password", {
+          flow: "signUp",
+          email: email.trim().toLowerCase(),
+          password
+        });
+      },
+      signOut
+    }),
+    [authToken, isAuthenticated, isLoading, signIn, signOut]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
 function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const recordAudioUpload = useMutation(api.files.recordAudioUpload);
   const create = useMutation(api.runs.createRun);
   const generating = useMutation(api.runs.markGenerating);
   const ready = useMutation(api.runs.markDraftReady);
@@ -90,6 +155,13 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
           throw new Error("Audio upload did not return a storage id.");
         }
 
+        await recordAudioUpload({
+          storageId: result.storageId,
+          fileName: file.name || "interview-audio",
+          contentType: file.type || undefined,
+          size: file.size
+        });
+
         return result.storageId;
       },
       createRun: async (input) => String(await create(input)),
@@ -106,10 +178,32 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
         await failed({ id: id as never, error });
       }
     }),
-    [create, exported, failed, generateUploadUrl, generating, ready]
+    [create, exported, failed, generateUploadUrl, generating, ready, recordAudioUpload]
   );
 
   return <EvidenceContext.Provider value={value}>{children}</EvidenceContext.Provider>;
+}
+
+function UnavailableAuthProvider({ children }: { children: ReactNode }) {
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      status: "unavailable",
+      authToken: null,
+      signInWithGoogle: async () => {
+        throw new Error("Convex auth is not configured.");
+      },
+      signInWithEmail: async () => {
+        throw new Error("Convex auth is not configured.");
+      },
+      signUpWithEmail: async () => {
+        throw new Error("Convex auth is not configured.");
+      },
+      signOut: async () => undefined
+    }),
+    []
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 function LocalEvidenceProvider({ children }: { children: ReactNode }) {

@@ -35,7 +35,6 @@ export type StorybookDraft = {
 };
 
 export type IntakePayload = {
-  accessKey: string;
   buyerName: string;
   email: string;
   elderName: string;
@@ -44,12 +43,10 @@ export type IntakePayload = {
   languageMix: string;
   preserveWords: string;
   dedication: string;
-  paymentReference: string;
   notes: string;
 };
 
 export const blankIntake: IntakePayload = {
-  accessKey: "",
   buyerName: "",
   email: "",
   elderName: "",
@@ -58,7 +55,6 @@ export const blankIntake: IntakePayload = {
   languageMix: "",
   preserveWords: "",
   dedication: "",
-  paymentReference: "external",
   notes: ""
 };
 
@@ -202,11 +198,8 @@ export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {
 export function normalizeIntake(value: unknown, fallback: Partial<IntakePayload> = {}): IntakePayload {
   const source = value && typeof value === "object" ? (value as Partial<IntakePayload>) : {};
   const base = { ...blankIntake, ...fallback };
-  const accessKey = stringOr(source.accessKey, base.accessKey || "");
-  const suppliedPaymentReference = stringOr(source.paymentReference, base.paymentReference || "");
 
   return {
-    accessKey,
     buyerName: stringOr(source.buyerName, base.buyerName || ""),
     email: stringOr(source.email, base.email || ""),
     elderName: stringOr(source.elderName, base.elderName || ""),
@@ -215,10 +208,6 @@ export function normalizeIntake(value: unknown, fallback: Partial<IntakePayload>
     languageMix: stringOr(source.languageMix, base.languageMix || ""),
     preserveWords: stringOr(source.preserveWords, base.preserveWords || ""),
     dedication: stringOr(source.dedication, base.dedication || ""),
-    paymentReference:
-      accessKey && (!suppliedPaymentReference || suppliedPaymentReference === "external")
-        ? `external:${accessKey}`
-        : suppliedPaymentReference || "external",
     notes: stringOr(source.notes, base.notes || "")
   };
 }
@@ -229,9 +218,7 @@ export function mergeIntakeWithExtraction(
 ): IntakePayload {
   const current = normalizeIntake(input);
   const inferred = normalizeIntake(extracted);
-  const accessKey = current.accessKey || inferred.accessKey;
-  const merged: IntakePayload = {
-    accessKey,
+  return {
     buyerName: current.buyerName || inferred.buyerName,
     email: current.email || inferred.email,
     elderName: inferred.elderName || current.elderName,
@@ -240,15 +227,7 @@ export function mergeIntakeWithExtraction(
     languageMix: inferred.languageMix || current.languageMix,
     preserveWords: mergeCommaText(current.preserveWords, inferred.preserveWords),
     dedication: inferred.dedication || current.dedication,
-    paymentReference: accessKey
-      ? `external:${accessKey}`
-      : current.paymentReference || inferred.paymentReference,
     notes: mergeSentences(current.notes, inferred.notes)
-  };
-
-  return {
-    ...merged,
-    paymentReference: merged.paymentReference || "external"
   };
 }
 
@@ -266,7 +245,6 @@ Transcript:
 
 Return only valid JSON with this exact shape:
 {
-  "accessKey": "",
   "buyerName": "",
   "email": "",
   "elderName": "",
@@ -275,7 +253,6 @@ Return only valid JSON with this exact shape:
   "languageMix": "",
   "preserveWords": "",
   "dedication": "",
-  "paymentReference": "",
   "notes": ""
 }
 
@@ -288,7 +265,6 @@ Rules:
 - preserveWords should be a comma-separated list of important names, places, foods, relationship terms, objects, and phrases that must be preserved exactly.
 - dedication should be filled only when the transcript implies a dedication or family note.
 - buyerName and email should be filled only if explicitly spoken or present in supplied fields.
-- accessKey and paymentReference should usually come from supplied fields, not the transcript.
 - notes should briefly name uncertainty or missing fields that need human review.
 - Use an empty string for any field not supported by the transcript or supplied fields. Do not invent facts.
 `;

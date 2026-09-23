@@ -28,7 +28,8 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
 
   try {
-    const { input, audio } = await readRequest(request);
+    const authToken = readBearerToken(request.headers.get("authorization"));
+    const { input, audio } = await readRequest(request, authToken);
 
     if (!(audio instanceof File)) {
       return NextResponse.json(
@@ -77,7 +78,6 @@ export async function POST(request: Request) {
 
 function readIntake(formData: FormData): IntakePayload {
   return normalizeIntake({
-    accessKey: getText(formData, "accessKey"),
     buyerName: getText(formData, "buyerName"),
     email: getText(formData, "email"),
     elderName: getText(formData, "elderName"),
@@ -86,7 +86,6 @@ function readIntake(formData: FormData): IntakePayload {
     languageMix: getText(formData, "languageMix"),
     preserveWords: getText(formData, "preserveWords"),
     dedication: getText(formData, "dedication"),
-    paymentReference: getText(formData, "paymentReference"),
     notes: getText(formData, "notes")
   });
 }
@@ -96,7 +95,10 @@ function getText(formData: FormData, key: keyof IntakePayload) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function readRequest(request: Request): Promise<{ input: IntakePayload; audio: File | null }> {
+async function readRequest(
+  request: Request,
+  authToken: string | null
+): Promise<{ input: IntakePayload; audio: File | null }> {
   const contentType = request.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     const payload = (await request.json()) as {
@@ -106,7 +108,7 @@ async function readRequest(request: Request): Promise<{ input: IntakePayload; au
 
     return {
       input: readJsonIntake(payload.input || {}),
-      audio: payload.audioStorageId ? await readStoredAudio(payload.audioStorageId) : null
+      audio: payload.audioStorageId ? await readStoredAudio(payload.audioStorageId, authToken) : null
     };
   }
 
@@ -122,13 +124,27 @@ function readJsonIntake(input: Partial<IntakePayload>): IntakePayload {
   return normalizeIntake(input);
 }
 
-async function readStoredAudio(storageId: Id<"_storage">) {
+function readBearerToken(authorization: string | null) {
+  if (!authorization) {
+    return null;
+  }
+
+  const [scheme, token] = authorization.split(" ");
+  return scheme?.toLowerCase() === "bearer" && token ? token : null;
+}
+
+async function readStoredAudio(storageId: Id<"_storage">, authToken: string | null) {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
   if (!convexUrl) {
     throw new Error("Convex is not configured for stored audio processing.");
   }
 
+  if (!authToken) {
+    throw new Error("Sign in again before generating the storybook.");
+  }
+
   const convex = new ConvexHttpClient(convexUrl);
+  convex.setAuth(authToken);
   const fileUrl = await convex.query(api.files.getUrl, { storageId });
   if (!fileUrl) {
     throw new Error("Uploaded audio could not be found.");

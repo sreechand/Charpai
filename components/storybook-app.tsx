@@ -6,24 +6,33 @@ import {
   CheckCircle2,
   Download,
   ImagePlus,
-  KeyRound,
+  LockKeyhole,
+  LogOut,
+  Mail,
   Loader2,
   Mic,
   Printer,
   Sparkles,
-  Upload
+  Upload,
+  UserCircle
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useSearchParams } from "next/navigation";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent
+} from "react";
 
-import { useEvidence } from "@/app/providers";
+import { useAuthSession, useEvidence } from "@/app/providers";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
 import {
   blankIntake,
   demoDraft,
   demoIntake,
   emptyDraft,
-  interviewPrompts,
   type IntakePayload,
   type StorybookDraft,
   type StorySection
@@ -44,7 +53,7 @@ type GenerateResponse = {
 
 export function StorybookApp() {
   const evidence = useEvidence();
-  const searchParams = useSearchParams();
+  const auth = useAuthSession();
   const runIdRef = useRef<string | null>(null);
   const [intake, setIntake] = useState(initialIntake);
   const [audio, setAudio] = useState<File | null>(null);
@@ -54,16 +63,16 @@ export function StorybookApp() {
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
 
-  const urlAccessKey = searchParams.get("key")?.trim() || "";
-  const accessKey = intake.accessKey || urlAccessKey;
-  const paymentReference = accessKey ? `external:${accessKey}` : "external";
-
   const fieldsNeedReview = useMemo(
     () => [intake.elderName, intake.relationship, intake.originPlace].some((value) => !value.trim()),
     [intake.elderName, intake.originPlace, intake.relationship]
   );
 
-  const canGenerate = Boolean(audio) && status !== "generating";
+  const canGenerate =
+    Boolean(audio) &&
+    status !== "generating" &&
+    auth.status === "authenticated" &&
+    Boolean(auth.authToken);
 
   async function handleGenerate() {
     setMessage("");
@@ -74,6 +83,12 @@ export function StorybookApp() {
     if (audioError) {
       setStatus("failed");
       setMessage(audioError);
+      return;
+    }
+
+    if (auth.status !== "authenticated" || !auth.authToken) {
+      setStatus("failed");
+      setMessage("Sign in before generating a Charpai preview.");
       return;
     }
 
@@ -90,7 +105,7 @@ export function StorybookApp() {
     }
 
     try {
-      const requestPayload = { input: { ...intake, accessKey, paymentReference }, audioStorageId };
+      const requestPayload = { input: intake, audioStorageId };
       const fallbackBody = new FormData();
       Object.entries(requestPayload.input).forEach(([key, value]) => fallbackBody.append(key, value));
       fallbackBody.append("audio", audio as File);
@@ -98,7 +113,10 @@ export function StorybookApp() {
       const response = await fetch("/api/generate-storybook", audioStorageId
         ? {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${auth.authToken}`
+            },
             body: JSON.stringify(requestPayload)
           }
         : {
@@ -125,15 +143,12 @@ export function StorybookApp() {
 
       try {
         const runId = await evidence.createRun({
-          accessKey: generatedIntake.accessKey || accessKey,
           buyerName: generatedIntake.buyerName,
           email: generatedIntake.email,
           elderName: generatedIntake.elderName,
           relationship: generatedIntake.relationship,
           originPlace: generatedIntake.originPlace,
           languageMix: generatedIntake.languageMix,
-          paymentReference: generatedIntake.paymentReference || paymentReference,
-          paymentStatus: "received",
           audioStorageId: audioStorageId || undefined,
           hasAudio: Boolean(audio),
           photoCount: photos.length
@@ -187,11 +202,7 @@ export function StorybookApp() {
   }
 
   function loadDemo() {
-    const seeded = demoIntake({
-      ...intake,
-      accessKey: "demo-rehearsal",
-      paymentReference: "external:demo-rehearsal"
-    });
+    const seeded = demoIntake(intake);
     setIntake(seeded);
     setDraft(demoDraft(seeded));
     setStatus("ready");
@@ -202,59 +213,43 @@ export function StorybookApp() {
     <main className="app-shell">
       <section className="masthead screen-only">
         <div>
-          <p className="eyebrow">Build Week Revenue v1</p>
-          <h1>Family Storybook Maker</h1>
+          <p className="eyebrow">Charpai</p>
+          <h1>Charpai</h1>
           <p className="masthead-copy">
-            Record a parent or grandparent answering warm prompts. Turn the audio into an
-            editable keepsake storybook and export it for the family.
+            Upload an interview recording. Charpai extracts the family details, drafts the first
+            storybook spread, and keeps every line editable before export.
           </p>
         </div>
         <div className="proof-strip" aria-label="Storybook constraints">
           <span>
-            <KeyRound size={16} aria-hidden /> Private link
+            <UserCircle size={16} aria-hidden /> {auth.status === "authenticated" ? "Signed in" : "Login required"}
           </span>
           <span>
-            <Mic size={16} aria-hidden /> 10 min audio
+            <Mic size={16} aria-hidden /> Audio first
           </span>
           <span>
-            <BookOpen size={16} aria-hidden /> Editable PDF path
+            <BookOpen size={16} aria-hidden /> Editable spread
           </span>
+          {auth.status === "authenticated" ? (
+            <button className="session-button" type="button" onClick={() => void auth.signOut()}>
+              <LogOut size={16} aria-hidden />
+              Sign out
+            </button>
+          ) : null}
         </div>
       </section>
 
+      {auth.status !== "authenticated" ? (
+        <AuthGate auth={auth} />
+      ) : (
       <section className="workspace">
         <aside className="intake-panel screen-only" aria-label="Storybook intake">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">{draft.sections.length ? "Review" : "Audio intake"}</p>
-              <h2>{draft.sections.length ? "Extracted family details" : "Upload audio for preview"}</h2>
+              <h2>{draft.sections.length ? "Extracted story details" : "Upload audio for preview"}</h2>
             </div>
           </div>
-
-          <div className={`access-box ${accessKey ? "ready" : "missing"}`}>
-            <KeyRound size={20} aria-hidden />
-            <div>
-              <p className="field-label">Private story link</p>
-              <strong>{accessKey ? "Ready to begin" : "Access key missing"}</strong>
-              <span>
-                {accessKey
-                  ? "This storybook will be saved against your private key."
-                  : "Use the custom link you received, or paste the key below."}
-              </span>
-            </div>
-          </div>
-
-          <TextField
-            label="Access key"
-            value={accessKey}
-            onChange={(value) =>
-              setIntake((current) => ({
-                ...current,
-                accessKey: value,
-                paymentReference: value ? `external:${value}` : "external"
-              }))
-            }
-          />
 
           <div className="upload-zone">
             <label className="upload-card">
@@ -285,7 +280,7 @@ export function StorybookApp() {
             <span>
               {draft.sections.length
                 ? "Correct anything the transcript missed."
-                : "These can be left blank until the audio is processed."}
+                : "Charpai fills these after the recording is processed."}
             </span>
           </div>
 
@@ -297,17 +292,6 @@ export function StorybookApp() {
           ) : null}
 
           <div className="field-grid">
-            <TextField
-              label="Buyer name"
-              value={intake.buyerName}
-              onChange={(value) => updateIntake("buyerName", value)}
-            />
-            <TextField
-              label="Email"
-              type="email"
-              value={intake.email}
-              onChange={(value) => updateIntake("email", value)}
-            />
             <TextField
               label="Elder name"
               value={intake.elderName}
@@ -323,43 +307,11 @@ export function StorybookApp() {
               value={intake.originPlace}
               onChange={(value) => updateIntake("originPlace", value)}
             />
-          </div>
-
-          <TextArea
-            label="Languages in the recording"
-            rows={2}
-            value={intake.languageMix}
-            onChange={(value) => updateIntake("languageMix", value)}
-          />
-          <TextArea
-            label="Names and places to preserve"
-            rows={3}
-            value={intake.preserveWords}
-            onChange={(value) => updateIntake("preserveWords", value)}
-          />
-          <TextArea
-            label="Dedication or family note"
-            rows={3}
-            value={intake.dedication}
-            onChange={(value) => updateIntake("dedication", value)}
-          />
-          <TextArea
-            label="Extra context"
-            rows={3}
-            value={intake.notes}
-            onChange={(value) => updateIntake("notes", value)}
-          />
-
-          <div className="prompt-block">
-            <div className="prompt-title">
-              <Sparkles size={16} aria-hidden />
-              Interview prompts
-            </div>
-            <ol>
-              {interviewPrompts.map((prompt) => (
-                <li key={prompt}>{prompt}</li>
-              ))}
-            </ol>
+            <TextField
+              label="Languages in the recording"
+              value={intake.languageMix}
+              onChange={(value) => updateIntake("languageMix", value)}
+            />
           </div>
 
           <div className="action-row">
@@ -447,7 +399,141 @@ export function StorybookApp() {
           ) : null}
         </section>
       </section>
+      )}
     </main>
+  );
+}
+
+function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
+  const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const unavailable = auth.status === "unavailable";
+
+  async function handleGoogleSignIn() {
+    setAuthMessage("");
+    setIsSubmitting(true);
+    try {
+      await auth.signInWithGoogle();
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Google sign-in failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMessage("");
+    setIsSubmitting(true);
+
+    try {
+      if (mode === "signUp") {
+        await auth.signUpWithEmail(email, password);
+      } else {
+        await auth.signInWithEmail(email, password);
+      }
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Email sign-in failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="auth-gate screen-only" aria-label="Charpai login">
+      <div className="auth-card">
+        <div className="auth-card-heading">
+          <p className="eyebrow">Login</p>
+          <h2>Sign in to Charpai</h2>
+        </div>
+
+        <button
+          className="google-button"
+          type="button"
+          disabled={isSubmitting || auth.status === "loading" || unavailable}
+          onClick={handleGoogleSignIn}
+        >
+          <UserCircle size={18} aria-hidden />
+          Continue with Google
+        </button>
+
+        <div className="auth-divider">
+          <span>Email</span>
+        </div>
+
+        <form className="auth-form" onSubmit={handleEmailSubmit}>
+          <label className="field">
+            <span>Email</span>
+            <input
+              autoComplete="email"
+              disabled={isSubmitting || unavailable}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              type="email"
+              value={email}
+            />
+          </label>
+          <label className="field">
+            <span>Password</span>
+            <input
+              autoComplete={mode === "signUp" ? "new-password" : "current-password"}
+              disabled={isSubmitting || unavailable}
+              minLength={8}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              type="password"
+              value={password}
+            />
+          </label>
+
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={isSubmitting || auth.status === "loading" || unavailable}
+          >
+            {isSubmitting || auth.status === "loading" ? (
+              <>
+                <Loader2 className="spin" size={18} aria-hidden /> Checking
+              </>
+            ) : mode === "signUp" ? (
+              <>
+                <Mail size={18} aria-hidden /> Create account
+              </>
+            ) : (
+              <>
+                <LockKeyhole size={18} aria-hidden /> Sign in
+              </>
+            )}
+          </button>
+        </form>
+
+        <button
+          className="form-switch"
+          type="button"
+          disabled={isSubmitting || unavailable}
+          onClick={() => setMode((current) => (current === "signIn" ? "signUp" : "signIn"))}
+        >
+          {mode === "signIn" ? "Create an email account" : "Use an existing account"}
+        </button>
+
+        {unavailable ? (
+          <div className="notice warning">
+            <AlertTriangle size={18} aria-hidden />
+            <span>Set Convex and Auth environment variables to enable login.</span>
+          </div>
+        ) : null}
+        {authMessage ? (
+          <div className="notice error">
+            <AlertTriangle size={18} aria-hidden />
+            <span>{authMessage}</span>
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -774,25 +860,6 @@ function TextField({
     <label className="field">
       <span>{label}</span>
       <input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  );
-}
-
-function TextArea({
-  label,
-  value,
-  onChange,
-  rows
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  rows: number;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <textarea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
