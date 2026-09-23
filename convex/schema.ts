@@ -2,6 +2,22 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 
+const storySection = v.object({
+  id: v.string(),
+  heading: v.string(),
+  body: v.string()
+});
+
+const charpaiDraftDesign = v.object({
+  memoryWorldLabel: v.string(),
+  accent: v.string(),
+  deep: v.string(),
+  handInk: v.string(),
+  handStyle: v.string(),
+  constructionNotes: v.string(),
+  artifactForms: v.array(v.string())
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -45,6 +61,29 @@ export default defineSchema({
   })
     .index("by_storage_id", ["storageId"])
     .index("by_user_id", ["userId"]),
+
+  storybookPages: defineTable({
+    ownerId: v.id("users"),
+    runId: v.optional(v.id("runs")),
+    slug: v.string(),
+    status: v.union(v.literal("published"), v.literal("deleted")),
+    title: v.string(),
+    subtitle: v.string(),
+    dedication: v.string(),
+    languageNote: v.string(),
+    sections: v.array(storySection),
+    closingNote: v.string(),
+    illustrationBrief: v.string(),
+    stampSubject: v.string(),
+    stampMotifs: v.array(v.string()),
+    photoCaptions: v.array(v.string()),
+    designSystem: charpaiDraftDesign,
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    deletedAt: v.optional(v.number())
+  })
+    .index("by_slug", ["slug"])
+    .index("by_owner_id_and_status", ["ownerId", "status"]),
 
   waitlist: defineTable({
     name: v.string(),

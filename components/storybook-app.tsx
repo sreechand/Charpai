@@ -5,6 +5,7 @@ import {
   BookOpen,
   CheckCircle2,
   Download,
+  ExternalLink,
   ImagePlus,
   LockKeyhole,
   LogOut,
@@ -13,6 +14,7 @@ import {
   Mic,
   Printer,
   Sparkles,
+  Trash2,
   Upload,
   UserCircle
 } from "lucide-react";
@@ -26,7 +28,8 @@ import {
   type FormEvent
 } from "react";
 
-import { useAuthSession, useEvidence } from "@/app/providers";
+import { useAuthSession, useEvidence, type StorybookPageSummary } from "@/app/providers";
+import type { Id } from "@/convex/_generated/dataModel";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
 import {
   blankIntake,
@@ -51,6 +54,15 @@ type GenerateResponse = {
   elapsedMs?: number;
 };
 
+type PendingRecommendation = {
+  intake: IntakePayload;
+  draft: StorybookDraft;
+  audioStorageId: Id<"_storage"> | null;
+  model: string;
+  elapsedMs: number;
+  warning: string;
+};
+
 export function StorybookApp() {
   const evidence = useEvidence();
   const auth = useAuthSession();
@@ -59,25 +71,36 @@ export function StorybookApp() {
   const [audio, setAudio] = useState<File | null>(null);
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
   const [draft, setDraft] = useState<StorybookDraft>(emptyDraft());
-  const [status, setStatus] = useState<"idle" | "generating" | "ready" | "failed">("idle");
+  const [pendingRecommendation, setPendingRecommendation] = useState<PendingRecommendation | null>(null);
+  const [status, setStatus] = useState<"idle" | "generating" | "reviewing" | "ready" | "failed">("idle");
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
+
+  const activeIntake = pendingRecommendation?.intake || intake;
+  const activeDraft = pendingRecommendation?.draft || draft;
+  const hasPendingRecommendation = Boolean(pendingRecommendation);
 
   const fieldsNeedReview = useMemo(
-    () => [intake.elderName, intake.relationship, intake.originPlace].some((value) => !value.trim()),
-    [intake.elderName, intake.originPlace, intake.relationship]
+    () =>
+      [activeIntake.elderName, activeIntake.relationship, activeIntake.originPlace].some((value) =>
+        !value.trim()
+      ),
+    [activeIntake.elderName, activeIntake.originPlace, activeIntake.relationship]
   );
 
   const canGenerate =
     Boolean(audio) &&
     status !== "generating" &&
+    !hasPendingRecommendation &&
     auth.status === "authenticated" &&
     Boolean(auth.authToken);
 
   async function handleGenerate() {
     setMessage("");
     setWarning("");
-    runIdRef.current = null;
+    setPendingRecommendation(null);
 
     const audioError = validateAudioFile(audio);
     if (audioError) {
@@ -130,42 +153,107 @@ export function StorybookApp() {
       }
 
       const generatedIntake = result.intake || requestPayload.input;
-      setDraft(result.draft);
-      setIntake(generatedIntake);
-      setWarning(result.warning || "");
-      setStatus("ready");
+      setPendingRecommendation({
+        intake: generatedIntake,
+        draft: result.draft,
+        audioStorageId,
+        model: result.model || "model",
+        elapsedMs: result.elapsedMs || 1000,
+        warning: result.warning || ""
+      });
+      setWarning("");
+      setStatus("reviewing");
       setMessage(
-        `${result.model || "model"} created the draft in ${Math.max(
+        `${result.model || "model"} prepared recommended changes in ${Math.max(
           1,
           Math.round((result.elapsedMs || 1000) / 1000)
-        )}s. Review the extracted fields and storybook before export.`
+        )}s.`
       );
-
-      try {
-        const runId = await evidence.createRun({
-          buyerName: generatedIntake.buyerName,
-          email: generatedIntake.email,
-          elderName: generatedIntake.elderName,
-          relationship: generatedIntake.relationship,
-          originPlace: generatedIntake.originPlace,
-          languageMix: generatedIntake.languageMix,
-          audioStorageId: audioStorageId || undefined,
-          hasAudio: Boolean(audio),
-          photoCount: photos.length
-        });
-        runIdRef.current = runId;
-        await evidence.markDraftReady(runId, result.draft.title);
-      } catch (error) {
-        const text = error instanceof Error ? error.message : "The run could not be saved.";
-        setWarning((current) => [current, text].filter(Boolean).join(" "));
-      }
     } catch (error) {
       const text = error instanceof Error ? error.message : "The storybook could not be generated.";
       setStatus("failed");
       setMessage(text);
-      if (runIdRef.current) {
-        await evidence.markFailed(runIdRef.current, text);
+    }
+  }
+
+  async function handleConfirmRecommendation() {
+    if (!pendingRecommendation || isPublishing) {
+      return;
+    }
+
+    const accepted = pendingRecommendation;
+    const warnings = accepted.warning ? [accepted.warning] : [];
+    let runId: string | null = null;
+    let publishedPath = "";
+
+    setIsPublishing(true);
+    setMessage("");
+    setWarning("");
+    setIntake(accepted.intake);
+    setDraft(accepted.draft);
+    setStatus("reviewing");
+
+    try {
+      runId = await evidence.createRun({
+        buyerName: accepted.intake.buyerName,
+        email: accepted.intake.email,
+        elderName: accepted.intake.elderName,
+        relationship: accepted.intake.relationship,
+        originPlace: accepted.intake.originPlace,
+        languageMix: accepted.intake.languageMix,
+        audioStorageId: accepted.audioStorageId || undefined,
+        hasAudio: Boolean(audio),
+        photoCount: photos.length
+      });
+      runIdRef.current = runId;
+      await evidence.markDraftReady(runId, accepted.draft.title);
+    } catch (error) {
+      warnings.push(error instanceof Error ? error.message : "The storybook run could not be saved.");
+    }
+
+    try {
+      const page = await evidence.publishStoryPage(accepted.draft, runId || undefined);
+      if (page) {
+        publishedPath = `/s/${page.slug}`;
       }
+    } catch (error) {
+      warnings.push(error instanceof Error ? error.message : "The storybook page could not be published.");
+    }
+
+    setIsPublishing(false);
+    setPendingRecommendation(null);
+    setStatus("ready");
+    setWarning(warnings.join(" "));
+    setMessage(
+      publishedPath
+        ? `Recommendations applied. Unlisted page published at ${publishedPath}.`
+        : "Recommendations applied."
+    );
+  }
+
+  function handleCancelRecommendation() {
+    setPendingRecommendation(null);
+    setWarning("");
+    setStatus(draft.sections.length ? "ready" : "idle");
+    setMessage("Recommended changes cancelled. The current storybook was not changed.");
+  }
+
+  async function handleDeleteStoryPage(pageId: string) {
+    if (!window.confirm("Delete this storybook page? The public link will stop working.")) {
+      return;
+    }
+
+    setDeletingPageId(pageId);
+    setMessage("");
+    setWarning("");
+
+    try {
+      await evidence.deleteStoryPage(pageId);
+      setMessage("Storybook page deleted. The public link now returns 404.");
+    } catch (error) {
+      setWarning(error instanceof Error ? error.message : "The storybook page could not be deleted.");
+    } finally {
+      setDeletingPageId(null);
     }
   }
 
@@ -185,14 +273,45 @@ export function StorybookApp() {
   }
 
   function updateIntake(key: keyof IntakePayload, value: string) {
+    if (pendingRecommendation) {
+      setPendingRecommendation((current) =>
+        current ? { ...current, intake: { ...current.intake, [key]: value } } : current
+      );
+      return;
+    }
+
     setIntake((current) => ({ ...current, [key]: value }));
   }
 
   function updateDraft(key: keyof StorybookDraft, value: string) {
+    if (pendingRecommendation) {
+      setPendingRecommendation((current) =>
+        current ? { ...current, draft: { ...current.draft, [key]: value } } : current
+      );
+      return;
+    }
+
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
   function updateSection(id: string, patch: Partial<StorySection>) {
+    if (pendingRecommendation) {
+      setPendingRecommendation((current) =>
+        current
+          ? {
+              ...current,
+              draft: {
+                ...current.draft,
+                sections: current.draft.sections.map((section) =>
+                  section.id === id ? { ...section, ...patch } : section
+                )
+              }
+            }
+          : current
+      );
+      return;
+    }
+
     setDraft((current) => ({
       ...current,
       sections: current.sections.map((section) =>
@@ -203,6 +322,7 @@ export function StorybookApp() {
 
   function loadDemo() {
     const seeded = demoIntake(intake);
+    setPendingRecommendation(null);
     setIntake(seeded);
     setDraft(demoDraft(seeded));
     setStatus("ready");
@@ -246,8 +366,10 @@ export function StorybookApp() {
         <aside className="intake-panel screen-only" aria-label="Storybook intake">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">{draft.sections.length ? "Review" : "Audio intake"}</p>
-              <h2>{draft.sections.length ? "Extracted story details" : "Upload audio for preview"}</h2>
+              <p className="eyebrow">{activeDraft.sections.length ? "Review" : "Audio intake"}</p>
+              <h2>
+                {activeDraft.sections.length ? "Extracted story details" : "Upload audio for preview"}
+              </h2>
             </div>
           </div>
 
@@ -276,15 +398,21 @@ export function StorybookApp() {
           </div>
 
           <div className="field-section-heading">
-            <p className="eyebrow">{draft.sections.length ? "Extracted fields" : "Details"}</p>
+            <p className="eyebrow">
+              {hasPendingRecommendation
+                ? "Recommended fields"
+                : activeDraft.sections.length
+                  ? "Extracted fields"
+                  : "Details"}
+            </p>
             <span>
-              {draft.sections.length
+              {activeDraft.sections.length
                 ? "Correct anything the transcript missed."
                 : "Charpai fills these after the recording is processed."}
             </span>
           </div>
 
-          {draft.sections.length && fieldsNeedReview ? (
+          {activeDraft.sections.length && fieldsNeedReview ? (
             <div className="notice warning">
               <AlertTriangle size={18} aria-hidden />
               <span>Some core fields are still blank. Review the transcript and fill them before export.</span>
@@ -294,22 +422,22 @@ export function StorybookApp() {
           <div className="field-grid">
             <TextField
               label="Elder name"
-              value={intake.elderName}
+              value={activeIntake.elderName}
               onChange={(value) => updateIntake("elderName", value)}
             />
             <TextField
               label="Relationship"
-              value={intake.relationship}
+              value={activeIntake.relationship}
               onChange={(value) => updateIntake("relationship", value)}
             />
             <TextField
               label="Origin place"
-              value={intake.originPlace}
+              value={activeIntake.originPlace}
               onChange={(value) => updateIntake("originPlace", value)}
             />
             <TextField
               label="Languages in the recording"
-              value={intake.languageMix}
+              value={activeIntake.languageMix}
               onChange={(value) => updateIntake("languageMix", value)}
             />
           </div>
@@ -336,6 +464,15 @@ export function StorybookApp() {
             </button>
           </div>
 
+          {pendingRecommendation ? (
+            <RecommendationReview
+              recommendation={pendingRecommendation}
+              isPublishing={isPublishing}
+              onCancel={handleCancelRecommendation}
+              onConfirm={handleConfirmRecommendation}
+            />
+          ) : null}
+
           {message ? (
             <div className={`notice ${status === "failed" ? "error" : "success"}`}>
               {status === "failed" ? (
@@ -352,18 +489,24 @@ export function StorybookApp() {
               <span>{warning}</span>
             </div>
           ) : null}
+
+          <ProfileStoriesPanel
+            deletingPageId={deletingPageId}
+            onDelete={(pageId) => void handleDeleteStoryPage(pageId)}
+            pages={evidence.storyPages}
+          />
         </aside>
 
         <section className="book-workbench" aria-label="Editable storybook">
           <div className="editor-toolbar screen-only">
             <div>
-              <p className="eyebrow">Storybook</p>
-              <h2>{draft.title || "Waiting for a recording"}</h2>
+              <p className="eyebrow">{hasPendingRecommendation ? "Pending preview" : "Storybook"}</p>
+              <h2>{activeDraft.title || "Waiting for a recording"}</h2>
             </div>
             <button
               className="export-button"
               type="button"
-              disabled={!draft.sections.length}
+              disabled={!draft.sections.length || hasPendingRecommendation}
               onClick={handleExport}
             >
               <Printer size={18} aria-hidden />
@@ -372,9 +515,9 @@ export function StorybookApp() {
           </div>
 
           <div id="storybook-print-area" className="storybook-page">
-            {draft.sections.length ? (
+            {activeDraft.sections.length ? (
               <StorybookEditor
-                draft={draft}
+                draft={activeDraft}
                 photos={photos}
                 onDraftChange={updateDraft}
                 onSectionChange={updateSection}
@@ -384,14 +527,14 @@ export function StorybookApp() {
             )}
           </div>
 
-          {draft.sections.length ? (
+          {activeDraft.sections.length ? (
             <div className="transcript-panel screen-only">
               <div>
                 <p className="eyebrow">Transcript review</p>
                 <h3>Correct names and mixed-language phrases</h3>
               </div>
               <textarea
-                value={draft.transcript}
+                value={activeDraft.transcript}
                 onChange={(event) => updateDraft("transcript", event.target.value)}
                 rows={8}
               />
@@ -402,6 +545,139 @@ export function StorybookApp() {
       )}
     </main>
   );
+}
+
+function RecommendationReview({
+  recommendation,
+  isPublishing,
+  onCancel,
+  onConfirm
+}: {
+  recommendation: PendingRecommendation;
+  isPublishing: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const seconds = Math.max(1, Math.round(recommendation.elapsedMs / 1000));
+
+  return (
+    <section className="recommendation-review">
+      <div className="recommendation-heading">
+        <div>
+          <p className="eyebrow">Recommended changes</p>
+          <h3>{recommendation.draft.title || "Generated storybook preview"}</h3>
+        </div>
+        <span>{`${recommendation.model} / ${seconds}s`}</span>
+      </div>
+
+      <dl className="recommendation-fields">
+        <div>
+          <dt>Elder</dt>
+          <dd>{recommendation.intake.elderName || "Needs review"}</dd>
+        </div>
+        <div>
+          <dt>Relationship</dt>
+          <dd>{recommendation.intake.relationship || "Needs review"}</dd>
+        </div>
+        <div>
+          <dt>Place</dt>
+          <dd>{recommendation.intake.originPlace || "Needs review"}</dd>
+        </div>
+        <div>
+          <dt>Language</dt>
+          <dd>{recommendation.intake.languageMix || "Needs review"}</dd>
+        </div>
+      </dl>
+
+      <div className="recommendation-actions">
+        <button className="secondary-button" type="button" disabled={isPublishing} onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" type="button" disabled={isPublishing} onClick={onConfirm}>
+          {isPublishing ? (
+            <>
+              <Loader2 className="spin" size={18} aria-hidden /> Publishing
+            </>
+          ) : (
+            <>
+              <CheckCircle2 size={18} aria-hidden /> Confirm changes
+            </>
+          )}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ProfileStoriesPanel({
+  deletingPageId,
+  onDelete,
+  pages
+}: {
+  deletingPageId: string | null;
+  onDelete: (pageId: string) => void;
+  pages: StorybookPageSummary[] | undefined;
+}) {
+  return (
+    <section className="profile-story-panel">
+      <div className="profile-story-heading">
+        <div>
+          <p className="eyebrow">Profile</p>
+          <h3>Your stories</h3>
+        </div>
+        <span>{pages ? pages.length : "..."}</span>
+      </div>
+
+      {pages === undefined ? (
+        <p className="profile-story-empty">Loading stories.</p>
+      ) : pages.length ? (
+        <ul className="profile-story-list">
+          {pages.map((page) => (
+            <li key={page._id}>
+              <div>
+                <strong>{page.title || "Untitled Charpai story"}</strong>
+                <span>{page.subtitle || formatStoryDate(page.createdAt)}</span>
+              </div>
+              <div className="profile-story-actions">
+                <a
+                  className="icon-link"
+                  href={`/s/${page.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open ${page.title || "storybook page"}`}
+                >
+                  <ExternalLink size={17} aria-hidden />
+                </a>
+                <button
+                  className="icon-button"
+                  type="button"
+                  disabled={deletingPageId === String(page._id)}
+                  onClick={() => onDelete(String(page._id))}
+                  aria-label={`Delete ${page.title || "storybook page"}`}
+                >
+                  {deletingPageId === String(page._id) ? (
+                    <Loader2 className="spin" size={17} aria-hidden />
+                  ) : (
+                    <Trash2 size={17} aria-hidden />
+                  )}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="profile-story-empty">Published story pages appear here.</p>
+      )}
+    </section>
+  );
+}
+
+function formatStoryDate(timestamp: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }).format(new Date(timestamp));
 }
 
 function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {

@@ -13,10 +13,11 @@ import {
   useAuthToken,
   useConvexAuth
 } from "@convex-dev/auth/react";
-import { ConvexReactClient, useMutation } from "convex/react";
+import { ConvexReactClient, useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import type { StorybookDraft } from "@/lib/storybook";
 
 type CreateRunInput = {
   buyerName?: string;
@@ -30,14 +31,26 @@ type CreateRunInput = {
   photoCount: number;
 };
 
+export type StorybookPageSummary = {
+  _id: Id<"storybookPages"> | string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 type EvidenceContextValue = {
   backend: "convex" | "local";
+  storyPages: StorybookPageSummary[] | undefined;
   uploadAudio: (file: File) => Promise<Id<"_storage"> | null>;
   createRun: (input: CreateRunInput) => Promise<string>;
   markGenerating: (id: string) => Promise<void>;
   markDraftReady: (id: string, title: string) => Promise<void>;
   markExported: (id: string, title: string) => Promise<void>;
   markFailed: (id: string, error: string) => Promise<void>;
+  publishStoryPage: (draft: StorybookDraft, runId?: string) => Promise<StorybookPageSummary | null>;
+  deleteStoryPage: (pageId: string) => Promise<void>;
 };
 
 type AuthContextValue = {
@@ -127,6 +140,7 @@ function ConvexAuthBridge({ children }: { children: ReactNode }) {
 }
 
 function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
+  const storyPages = useQuery(api.storybookPages.listMine);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const recordAudioUpload = useMutation(api.files.recordAudioUpload);
   const create = useMutation(api.runs.createRun);
@@ -134,10 +148,13 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
   const ready = useMutation(api.runs.markDraftReady);
   const exported = useMutation(api.runs.markExported);
   const failed = useMutation(api.runs.markFailed);
+  const publish = useMutation(api.storybookPages.publish);
+  const deletePublishedPage = useMutation(api.storybookPages.deletePage);
 
   const value = useMemo<EvidenceContextValue>(
     () => ({
       backend: "convex",
+      storyPages,
       uploadAudio: async (file) => {
         const uploadUrl = await generateUploadUrl();
         const response = await fetch(uploadUrl, {
@@ -176,9 +193,29 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
       },
       markFailed: async (id, error) => {
         await failed({ id: id as never, error });
+      },
+      publishStoryPage: async (draft, runId) => {
+        return await publish({
+          draft,
+          runId: runId ? (runId as Id<"runs">) : undefined
+        });
+      },
+      deleteStoryPage: async (pageId) => {
+        await deletePublishedPage({ pageId: pageId as Id<"storybookPages"> });
       }
     }),
-    [create, exported, failed, generateUploadUrl, generating, ready, recordAudioUpload]
+    [
+      create,
+      deletePublishedPage,
+      exported,
+      failed,
+      generateUploadUrl,
+      generating,
+      publish,
+      ready,
+      recordAudioUpload,
+      storyPages
+    ]
   );
 
   return <EvidenceContext.Provider value={value}>{children}</EvidenceContext.Provider>;
@@ -228,6 +265,7 @@ function LocalEvidenceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<EvidenceContextValue>(
     () => ({
       backend: "local",
+      storyPages: [],
       uploadAudio: async () => null,
       createRun: async (input) => {
         const id = `local-${Date.now()}`;
@@ -241,7 +279,9 @@ function LocalEvidenceProvider({ children }: { children: ReactNode }) {
       markGenerating: async (id) => save(id, { status: "generating" }),
       markDraftReady: async (id, title) => save(id, { status: "draft_ready", title }),
       markExported: async (id, title) => save(id, { status: "exported", title }),
-      markFailed: async (id, error) => save(id, { status: "failed", error })
+      markFailed: async (id, error) => save(id, { status: "failed", error }),
+      publishStoryPage: async () => null,
+      deleteStoryPage: async () => undefined
     }),
     [save]
   );
