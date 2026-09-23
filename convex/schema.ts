@@ -6,6 +6,7 @@ export default defineSchema({
   ...authTables,
 
   runs: defineTable({
+    accessKey: v.optional(v.string()),
     userId: v.optional(v.id("users")),
     buyerName: v.string(),
     email: v.string(),
