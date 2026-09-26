@@ -80,13 +80,6 @@ export function StorybookPublic({ story }: { story: PublicStorybook }) {
             {story.dedication ? <p className="public-book-dedication">{story.dedication}</p> : null}
           </section>
 
-          {story.languageNote ? (
-            <section className="language-note public-language-note">
-              <span aria-hidden>!</span>
-              <p>{story.languageNote}</p>
-            </section>
-          ) : null}
-
           {story.sections.map((section) => (
             <section className="story-section public-story-section" key={section.id}>
               <h3>{section.heading}</h3>

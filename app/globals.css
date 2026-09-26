@@ -898,8 +898,7 @@ textarea {
 .book-dedication,
 .story-section-heading,
 .story-section-body,
-.closing-note textarea,
-.language-note textarea {
+.closing-note textarea {
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -1079,27 +1078,6 @@ textarea {
 .stamp-ghost {
   stroke: color-mix(in srgb, var(--memory-accent) 20%, transparent);
   stroke-width: 3;
-}
-
-.language-note {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
-  align-items: start;
-  margin: 24px 0;
-  border: 1px solid color-mix(in srgb, var(--wrappergold) 36%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--wrappergold) 14%, transparent);
-  padding: 10px 12px;
-}
-
-.language-note textarea {
-  min-height: 40px;
-  padding: 0;
-  color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.4;
 }
 
 .story-section {
@@ -1344,27 +1322,6 @@ textarea {
   color: var(--ink-soft);
   font-size: 17px;
   line-height: 1.45;
-}
-
-.public-language-note p {
-  margin: 0;
-  color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.public-language-note span {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--wrappergold) 22%, transparent);
-  color: var(--memory-accent);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .public-story-section h3 {

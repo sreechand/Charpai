@@ -532,6 +532,10 @@ export function StorybookApp() {
             </button>
           </div>
 
+          {!pendingRecommendation && status === "ready" && draft.languageNote ? (
+            <LanguageReviewAlert note={draft.languageNote} />
+          ) : null}
+
           {status === "generating" ? (
             <GenerationProgress stage={generationStage} />
           ) : null}
@@ -731,7 +735,20 @@ function RecommendationReview({
           )}
         </button>
       </div>
+
+      {recommendation.draft.languageNote ? (
+        <LanguageReviewAlert note={recommendation.draft.languageNote} />
+      ) : null}
     </section>
+  );
+}
+
+function LanguageReviewAlert({ note }: { note: string }) {
+  return (
+    <div className="notice warning" role="alert">
+      <AlertTriangle size={18} aria-hidden />
+      <span>{note}</span>
+    </div>
   );
 }
 
@@ -993,16 +1010,6 @@ function StorybookEditor({
             onChange={(value) => onDraftChange("dedication", value)}
             ariaLabel="Dedication"
             rows={3}
-          />
-        </section>
-
-        <section className="language-note">
-          <AlertTriangle size={16} aria-hidden />
-          <AutoSizeTextArea
-            value={draft.languageNote}
-            onChange={(value) => onDraftChange("languageNote", value)}
-            rows={2}
-            ariaLabel="Language review note"
           />
         </section>
 
