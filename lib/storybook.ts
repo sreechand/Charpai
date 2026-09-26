@@ -79,17 +79,17 @@ const fallbackSections: StorySection[] = [
   {
     id: "place",
     heading: "Where the Story Begins",
-    body: "This opening page preserves the place, weather, streets, people, and everyday rhythms that shaped the elder's early life."
+    body: "I remember the place where I grew up through its weather, streets, familiar people, and the rhythm of ordinary days."
   },
   {
     id: "home",
     heading: "The Smell of Home",
-    body: "Food, festivals, familiar voices, and small family rituals become the doorway into memories that younger family members can hold on to."
+    body: "When I think of home, I remember its food, festivals, familiar voices, and the small rituals we shared as a family."
   },
   {
-    id: "lesson",
-    heading: "What Life Taught Me",
-    body: "The story closes around one hard-won lesson, one source of pride, and one memory the elder wants the family to carry forward."
+    id: "memory",
+    heading: "A Memory I Still Carry",
+    body: "One memory still returns to me clearly, in the same details and words I use when I tell the story aloud."
   }
 ];
 
@@ -122,7 +122,7 @@ export function demoDraft(input: Partial<IntakePayload> = {}): StorybookDraft {
     subtitle: `A keepsake from ${originPlace}`,
     dedication:
       input.dedication ||
-      `For the children and grandchildren who should know the voice, places, and lessons behind their ${relationship}.`,
+      `For the children and grandchildren who should know the voice and memories of their ${relationship}.`,
     languageNote:
       input.languageMix ||
       "Generated from the uploaded interview. Please review family names, places, and mixed-language phrases before exporting.",
@@ -130,7 +130,7 @@ export function demoDraft(input: Partial<IntakePayload> = {}): StorybookDraft {
       ...section,
       body: section.body.replace("the elder", elderName)
     })),
-    closingNote: `What ${elderName} wants remembered is not only the facts of a life, but the feeling of belonging to a family story.`,
+    closingNote: `These are the memories I wanted to share, in the way I remember them.`,
     transcript:
       "Demo transcript placeholder. Add OPENAI_API_KEY to generate a real transcript from the uploaded audio.",
     illustrationBrief: `A small rubber-stamp field note of ${originPlace}, using only a market arch, a coffee tumbler, a winding lane, and a family doorway on uncoated paper.`,
@@ -314,11 +314,11 @@ Return only valid JSON with this exact shape:
   "dedication": "one sentence dedication",
   "languageNote": "short reminder to review names, places and mixed-language phrases",
   "sections": [
-    {"id":"place","heading":"section heading","body":"120-180 words in warm storybook prose"},
-    {"id":"memory","heading":"section heading","body":"120-180 words in warm storybook prose"},
-    {"id":"lesson","heading":"section heading","body":"120-180 words in warm storybook prose"}
+    {"id":"place","heading":"section heading","body":"120-180 words in the interviewee's first-person voice"},
+    {"id":"memory","heading":"section heading","body":"120-180 words in the interviewee's first-person voice"},
+    {"id":"another-memory","heading":"section heading","body":"120-180 words in the interviewee's first-person voice"}
   ],
-  "closingNote": "one paragraph in the elder's spirit",
+  "closingNote": "one first-person closing paragraph using only what the interviewee said",
   "illustrationBrief": "one sentence visual direction for a small rubber-stamp field-note impression, no private data beyond names/places supplied",
   "stampSubject": "the most distinctive place, object, food, room, landscape, or memory fragment to illustrate",
   "stampMotifs": ["3 to 6 essential visual forms only, no labels, no people, no clutter"],
@@ -335,12 +335,18 @@ Return only valid JSON with this exact shape:
 }
 
 Rules:
+- Write every section body and the closingNote in the interviewee's first-person voice, using “I,” “we,” and “my” as the interviewee did. Never narrate the interviewee's life in the third person.
+- Keep the narrative as close as possible to the interviewee's own words, phrasing, emphasis, uncertainty, and point of view. Preserve distinctive expressions and concrete details from the transcript.
+- You may lightly reorder, combine, and bridge statements only when needed to make the story coherent and readable. Do not change what happened or make the interviewee sound more certain, polished, sentimental, or reflective than they were.
+- Do not add a moral, lesson, takeaway, interpretation, psychological explanation, legacy statement, or inspirational conclusion unless the interviewee explicitly expressed it in the transcript. Do not infer meaning on their behalf.
+- Do not invent dialogue, thoughts, feelings, sensory details, motivations, chronology, or facts that the interviewee did not state.
+- Section headings may be concise editorial labels, but they must describe the memories rather than interpret them.
 - First determine the dominant language and script from the transcript itself. The transcript overrides the supplied "Languages in audio" field if they conflict.
 - If the transcript is predominantly English, write every natural-language output field in English, including the title, subtitle, dedication, languageNote, section headings and bodies, closingNote, illustration fields, photo captions, and design-system descriptions. Preserve proper nouns and family terms in their original form.
 - If the transcript is Hindi, Tamil, Telugu, or another non-English language, do not translate the storybook into English.
 - If the transcript naturally mixes languages, preserve the same kind of code-switching and keep original family phrases, foods, places and relationship terms.
 - Do not invent major life events that are not in the transcript.
-- Keep emotional texture, places, foods, people and lessons.
+- Keep the interviewee's own emotional texture and their concrete references to places, foods, people, and events.
 - If the transcript is thin, write a modest story and say what needs confirmation.
 - Preserve Indian family relationship terms and proper nouns.
 - Avoid melodrama. Make it feel like a family keepsake, not an obituary.
