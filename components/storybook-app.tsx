@@ -63,10 +63,51 @@ type PendingRecommendation = {
   warning: string;
 };
 
+const generationStages = [
+  {
+    id: "uploading",
+    label: "Uploading recording",
+    buttonLabel: "Uploading",
+    detail: "Securely saving the interview audio.",
+    progress: 12
+  },
+  {
+    id: "preparing",
+    label: "Preparing the audio",
+    buttonLabel: "Preparing audio",
+    detail: "Optimizing the recording while preserving voice detail.",
+    progress: 28
+  },
+  {
+    id: "transcribing",
+    label: "Listening to the interview",
+    buttonLabel: "Transcribing",
+    detail: "Transcribing the conversation and separating voices where possible.",
+    progress: 52
+  },
+  {
+    id: "understanding",
+    label: "Reading the memories",
+    buttonLabel: "Reading memories",
+    detail: "Finding the names, places, relationships, and moments that matter.",
+    progress: 74
+  },
+  {
+    id: "writing",
+    label: "Shaping the storybook",
+    buttonLabel: "Writing story",
+    detail: "Turning the interview into an editable family keepsake.",
+    progress: 91
+  }
+] as const;
+
+type GenerationStageId = (typeof generationStages)[number]["id"];
+
 export function StorybookApp() {
   const evidence = useEvidence();
   const auth = useAuthSession();
   const runIdRef = useRef<string | null>(null);
+  const generationTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const [intake, setIntake] = useState(initialIntake);
   const [audio, setAudio] = useState<File | null>(null);
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
@@ -77,10 +118,18 @@ export function StorybookApp() {
   const [warning, setWarning] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
+  const [generationStageId, setGenerationStageId] =
+    useState<GenerationStageId>("uploading");
 
   const activeIntake = pendingRecommendation?.intake || intake;
   const activeDraft = pendingRecommendation?.draft || draft;
   const hasPendingRecommendation = Boolean(pendingRecommendation);
+  const generationStage =
+    generationStages.find((stage) => stage.id === generationStageId) || generationStages[0];
+
+  useEffect(() => {
+    return () => clearGenerationTimers(generationTimersRef.current);
+  }, []);
 
   const fieldsNeedReview = useMemo(
     () =>
@@ -115,6 +164,8 @@ export function StorybookApp() {
       return;
     }
 
+    clearGenerationTimers(generationTimersRef.current);
+    setGenerationStageId("uploading");
     setStatus("generating");
 
     let audioStorageId: Awaited<ReturnType<typeof evidence.uploadAudio>> = null;
@@ -128,6 +179,12 @@ export function StorybookApp() {
     }
 
     try {
+      setGenerationStageId("preparing");
+      generationTimersRef.current = [
+        setTimeout(() => setGenerationStageId("transcribing"), 2500),
+        setTimeout(() => setGenerationStageId("understanding"), 22000),
+        setTimeout(() => setGenerationStageId("writing"), 36000)
+      ];
       const requestPayload = { input: intake, audioStorageId };
       const fallbackBody = new FormData();
       Object.entries(requestPayload.input).forEach(([key, value]) => fallbackBody.append(key, value));
@@ -173,6 +230,8 @@ export function StorybookApp() {
       const text = error instanceof Error ? error.message : "The storybook could not be generated.";
       setStatus("failed");
       setMessage(text);
+    } finally {
+      clearGenerationTimers(generationTimersRef.current);
     }
   }
 
@@ -454,7 +513,8 @@ export function StorybookApp() {
             >
               {status === "generating" ? (
                 <>
-                  <Loader2 className="spin" size={18} aria-hidden /> Generating
+                  <Loader2 className="spin" size={18} aria-hidden />
+                  {generationStage.buttonLabel}
                 </>
               ) : (
                 <>
@@ -463,6 +523,10 @@ export function StorybookApp() {
               )}
             </button>
           </div>
+
+          {status === "generating" ? (
+            <GenerationProgress stage={generationStage} />
+          ) : null}
 
           {pendingRecommendation ? (
             <RecommendationReview
@@ -545,6 +609,60 @@ export function StorybookApp() {
       )}
     </main>
   );
+}
+
+function GenerationProgress({
+  stage
+}: {
+  stage: (typeof generationStages)[number];
+}) {
+  const stageIndex = generationStages.findIndex((candidate) => candidate.id === stage.id);
+
+  return (
+    <section className="generation-progress">
+      <div
+        className="generation-progress-heading"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div>
+          <p className="eyebrow">Working on your story</p>
+          <h3>{stage.label}</h3>
+        </div>
+        <span>{stageIndex + 1} / {generationStages.length}</span>
+      </div>
+      <p>{stage.detail}</p>
+      <div
+        className="generation-progress-track"
+        role="progressbar"
+        aria-label="Story generation progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={stage.progress}
+      >
+        <span style={{ width: `${stage.progress}%` }} />
+      </div>
+      <ol aria-label="Generation steps">
+        {generationStages.map((candidate, index) => (
+          <li
+            className={
+              index < stageIndex ? "complete" : index === stageIndex ? "active" : undefined
+            }
+            key={candidate.id}
+          >
+            <span aria-hidden>{index < stageIndex ? "✓" : index + 1}</span>
+            {candidate.label}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function clearGenerationTimers(timers: Array<ReturnType<typeof setTimeout>>) {
+  timers.forEach((timer) => clearTimeout(timer));
+  timers.length = 0;
 }
 
 function RecommendationReview({
