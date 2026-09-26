@@ -61,16 +61,6 @@ export function StorybookPublic({ story }: { story: PublicStorybook }) {
             <p className="public-illustration-brief">{story.illustrationBrief}</p>
           ) : null}
 
-          {story.designSystem.artifactForms.length ? (
-            <section className="public-artifacts" aria-label="Artifact forms">
-              <p className="eyebrow">Page construction</p>
-              <ul>
-                {story.designSystem.artifactForms.map((artifact) => (
-                  <li key={artifact}>{artifact}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
         </section>
 
         <section className="text-page public-text-page" aria-label="Storybook text">
