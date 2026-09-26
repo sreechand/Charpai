@@ -179,6 +179,11 @@ async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
     })) as unknown as TranscriptionDiarized;
 
     const segments = transcription.segments.filter((segment) => segment.text.trim());
+    const speakers = new Set(segments.map((segment) => segment.speaker));
+    if (speakers.size < 2) {
+      return await transcribeWithoutDiarization(openai, compressedAudio, input);
+    }
+
     const intervieweeSpeaker = await identifyIntervieweeSpeaker(openai, segments, input);
     const intervieweeTranscript = segments
       .filter((segment) => segment.speaker === intervieweeSpeaker)
@@ -202,18 +207,42 @@ async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
   }
 }
 
+async function transcribeWithoutDiarization(
+  openai: OpenAI,
+  audio: File,
+  input: IntakePayload
+) {
+  const configuredModel = process.env.OPENAI_TRANSCRIBE_MODEL;
+  const model =
+    configuredModel && configuredModel !== "gpt-4o-transcribe-diarize"
+      ? configuredModel
+      : "gpt-4o-mini-transcribe";
+  const prompt = [
+    "This is a family interview for a keepsake storybook.",
+    "Transcribe in the original spoken language and script where possible. Do not translate into English.",
+    `The speaker may use ${input.languageMix || "English, Hindi, Tamil, Telugu, or a mix"}.`,
+    `Preserve these names and places exactly where possible: ${input.preserveWords || "none supplied"}.`
+  ].join(" ");
+  const transcription = await openai.audio.transcriptions.create({
+    file: audio,
+    model,
+    prompt
+  });
+  const transcript = transcription.text.trim();
+
+  if (!transcript) {
+    throw new Error("The recording did not contain speech that could be transcribed.");
+  }
+
+  return transcript;
+}
+
 async function identifyIntervieweeSpeaker(
   openai: OpenAI,
   segments: TranscriptionDiarizedSegment[],
   input: IntakePayload
 ) {
   const speakers = Array.from(new Set(segments.map((segment) => segment.speaker)));
-  if (speakers.length < 2) {
-    throw new Error(
-      "The recording did not contain two distinguishable speakers. Please use a clear recording with both interviewer and interviewee."
-    );
-  }
-
   const labeledTranscript = segments
     .map(
       (segment) =>
