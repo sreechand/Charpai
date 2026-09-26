@@ -1,4 +1,8 @@
 import OpenAI from "openai";
+import type {
+  TranscriptionDiarized,
+  TranscriptionDiarizedSegment
+} from "openai/resources/audio/transcriptions";
 import { NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import ffmpegStatic from "ffmpeg-static";
@@ -162,23 +166,31 @@ async function readStoredAudio(storageId: Id<"_storage">, authToken: string | nu
 }
 
 async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
-  const model = process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe";
   const compressedAudio = await compressAudioLosslessly(audio);
-  const prompt = [
-    `This is a family interview for a keepsake storybook.`,
-    `Transcribe in the original spoken language and script where possible. Do not translate into English.`,
-    `The speaker may use ${input.languageMix || "English, Hindi, Tamil, Telugu, or a mix"}.`,
-    `Preserve these names and places exactly where possible: ${input.preserveWords || "none supplied"}.`
-  ].join(" ");
 
   try {
-    const transcription = await openai.audio.transcriptions.create({
+    // The current SDK response overload omits diarized_json even though its
+    // runtime type is exported and the API supports it.
+    const transcription = (await openai.audio.transcriptions.create({
       file: compressedAudio,
-      model,
-      prompt
-    });
+      model: "gpt-4o-transcribe-diarize",
+      response_format: "diarized_json",
+      chunking_strategy: "auto"
+    })) as unknown as TranscriptionDiarized;
 
-    return transcription.text;
+    const segments = transcription.segments.filter((segment) => segment.text.trim());
+    const intervieweeSpeaker = await identifyIntervieweeSpeaker(openai, segments, input);
+    const intervieweeTranscript = segments
+      .filter((segment) => segment.speaker === intervieweeSpeaker)
+      .map((segment) => segment.text.trim())
+      .filter(Boolean)
+      .join("\n");
+
+    if (!intervieweeTranscript) {
+      throw new Error("The interviewee's speech could not be isolated from the recording.");
+    }
+
+    return intervieweeTranscript;
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("25 MB") || message.includes("maximum") || message.includes("too large")) {
@@ -188,6 +200,60 @@ async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
     }
     throw error;
   }
+}
+
+async function identifyIntervieweeSpeaker(
+  openai: OpenAI,
+  segments: TranscriptionDiarizedSegment[],
+  input: IntakePayload
+) {
+  const speakers = Array.from(new Set(segments.map((segment) => segment.speaker)));
+  if (speakers.length < 2) {
+    throw new Error(
+      "The recording did not contain two distinguishable speakers. Please use a clear recording with both interviewer and interviewee."
+    );
+  }
+
+  const labeledTranscript = segments
+    .map(
+      (segment) =>
+        `[${segment.speaker} ${formatTimestamp(segment.start)}-${formatTimestamp(segment.end)}] ${segment.text.trim()}`
+    )
+    .join("\n");
+  const model = process.env.OPENAI_TEXT_MODEL || "gpt-5-mini";
+  const response = await openai.responses.create({
+    model,
+    instructions: [
+      "Identify the interviewee in a speaker-diarized family-history interview.",
+      "The interviewee is the person answering questions and sharing their own memories; the interviewer asks or prompts.",
+      "Return only JSON in the form {\"speaker\":\"A\"}, using exactly one speaker label present in the transcript.",
+      "Do not select a speaker merely because they speak first."
+    ].join(" "),
+    input: [
+      `Expected interviewee name or family title: ${input.elderName || "not provided"}`,
+      `Expected relationship: ${input.relationship || "not provided"}`,
+      `Available speaker labels: ${speakers.join(", ")}`,
+      "Transcript:",
+      labeledTranscript
+    ].join("\n")
+  });
+
+  if (!response.output_text) {
+    throw new Error("The interviewee could not be identified from the recording.");
+  }
+
+  const result = JSON.parse(extractJson(response.output_text)) as { speaker?: unknown };
+  if (typeof result.speaker !== "string" || !speakers.includes(result.speaker)) {
+    throw new Error("The interviewee could not be identified reliably from the recording.");
+  }
+
+  return result.speaker;
+}
+
+function formatTimestamp(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
 }
 
 async function compressAudioLosslessly(audio: File) {
