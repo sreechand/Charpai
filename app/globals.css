@@ -1023,6 +1023,15 @@ textarea {
   mix-blend-mode: multiply;
 }
 
+.generated-story-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .stamp-scene {
   position: relative;
   z-index: 1;
@@ -1232,6 +1241,10 @@ textarea {
   gap: 14px;
   padding: 30px;
   text-align: center;
+}
+
+.public-memory-poster.has-generated-image {
+  padding: 0;
 }
 
 .public-memory-poster > * {

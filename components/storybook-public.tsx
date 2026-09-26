@@ -13,6 +13,7 @@ export type PublicStorybook = {
   illustrationBrief: string;
   stampSubject: string;
   stampMotifs: string[];
+  illustrationUrl: string | null;
   photoCaptions: string[];
   designSystem: CharpaiDraftDesign;
   createdAt: number;
@@ -33,14 +34,27 @@ export function StorybookPublic({ story }: { story: PublicStorybook }) {
 
       <article className="book public-book" aria-label={story.title}>
         <section className="visual-page public-visual-page" aria-label="Storybook memory world">
-          <section className="field-note-poster public-memory-poster">
-            <div className="public-memory-label">{story.designSystem.memoryWorldLabel}</div>
-            <div className="public-memory-subject">{story.stampSubject}</div>
-            <div className="public-motif-grid" aria-label="Visual motifs">
-              {story.stampMotifs.slice(0, 6).map((motif) => (
-                <span key={motif}>{motif}</span>
-              ))}
-            </div>
+          <section
+            className={`field-note-poster public-memory-poster${story.illustrationUrl ? " has-generated-image" : ""}`}
+          >
+            {story.illustrationUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                className="generated-story-image"
+                src={story.illustrationUrl}
+                alt={story.illustrationBrief || story.stampSubject}
+              />
+            ) : (
+              <>
+                <div className="public-memory-label">{story.designSystem.memoryWorldLabel}</div>
+                <div className="public-memory-subject">{story.stampSubject}</div>
+                <div className="public-motif-grid" aria-label="Visual motifs">
+                  {story.stampMotifs.slice(0, 6).map((motif) => (
+                    <span key={motif}>{motif}</span>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
 
           {story.illustrationBrief ? (

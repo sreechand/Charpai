@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 
@@ -31,6 +31,7 @@ const storybookDraft = v.object({
   illustrationBrief: v.string(),
   stampSubject: v.string(),
   stampMotifs: v.array(v.string()),
+  illustrationStorageId: v.optional(v.id("_storage")),
   photoCaptions: v.array(v.string()),
   designSystem: charpaiDraftDesign
 });
@@ -47,6 +48,7 @@ const publicStorybookPage = v.object({
   illustrationBrief: v.string(),
   stampSubject: v.string(),
   stampMotifs: v.array(v.string()),
+  illustrationUrl: v.union(v.string(), v.null()),
   photoCaptions: v.array(v.string()),
   designSystem: charpaiDraftDesign,
   createdAt: v.number(),
@@ -105,7 +107,7 @@ export const getPublicBySlug = query({
       return null;
     }
 
-    return toPublicPage(page);
+    return await toPublicPage(ctx, page);
   }
 });
 
@@ -119,6 +121,9 @@ export const publish = mutation({
     const ownerId = await requireAuthUserId(ctx);
     if (args.runId) {
       await requireOwnedRun(ctx, args.runId, ownerId);
+    }
+    if (args.draft.illustrationStorageId) {
+      await requireOwnedStorybookImage(ctx, args.draft.illustrationStorageId, ownerId);
     }
 
     const now = Date.now();
@@ -138,7 +143,7 @@ export const publish = mutation({
     if (!page) {
       throw new Error("Published page could not be loaded.");
     }
-    return toPublicPage(page);
+    return await toPublicPage(ctx, page);
   }
 });
 
@@ -188,6 +193,20 @@ async function requireOwnedRun(ctx: MutationCtx, runId: Id<"runs">, ownerId: Id<
   }
 }
 
+async function requireOwnedStorybookImage(
+  ctx: MutationCtx,
+  storageId: Id<"_storage">,
+  ownerId: Id<"users">
+) {
+  const image = await ctx.db
+    .query("storybookImages")
+    .withIndex("by_storage_id", (q) => q.eq("storageId", storageId))
+    .unique();
+  if (!image || image.userId !== ownerId) {
+    throw new Error("You do not have access to this storybook image.");
+  }
+}
+
 async function generateUniqueSlug(ctx: MutationCtx, title: string) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const slug = `${slugPrefix(title)}-${randomToken()}`;
@@ -233,6 +252,7 @@ function sanitizeDraft(draft: Infer<typeof storybookDraft>) {
     illustrationBrief: limitText(draft.illustrationBrief, 500),
     stampSubject: limitText(draft.stampSubject, 180),
     stampMotifs: draft.stampMotifs.map((motif) => limitText(motif, 80)).filter(Boolean).slice(0, 6),
+    illustrationStorageId: draft.illustrationStorageId,
     photoCaptions: draft.photoCaptions
       .map((caption) => limitText(caption, 160))
       .filter(Boolean)
@@ -252,7 +272,7 @@ function sanitizeDraft(draft: Infer<typeof storybookDraft>) {
   };
 }
 
-function toPublicPage(page: {
+async function toPublicPage(ctx: MutationCtx | QueryCtx, page: {
   _id: Id<"storybookPages">;
   slug: string;
   title: string;
@@ -264,6 +284,7 @@ function toPublicPage(page: {
   illustrationBrief: string;
   stampSubject: string;
   stampMotifs: string[];
+  illustrationStorageId?: Id<"_storage">;
   photoCaptions: string[];
   designSystem: {
     memoryWorldLabel: string;
@@ -277,6 +298,9 @@ function toPublicPage(page: {
   createdAt: number;
   updatedAt: number;
 }) {
+  const illustrationUrl = page.illustrationStorageId
+    ? await ctx.storage.getUrl(page.illustrationStorageId)
+    : null;
   return {
     _id: page._id,
     slug: page.slug,
@@ -289,6 +313,7 @@ function toPublicPage(page: {
     illustrationBrief: page.illustrationBrief,
     stampSubject: page.stampSubject,
     stampMotifs: page.stampMotifs,
+    illustrationUrl,
     photoCaptions: page.photoCaptions,
     designSystem: page.designSystem,
     createdAt: page.createdAt,

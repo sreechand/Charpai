@@ -22,11 +22,13 @@ import {
   normalizeIntake,
   type IntakePayload
 } from "@/lib/storybook";
+import { buildStorybookImagePrompt } from "@/lib/storybook-image";
 import { maxAudioBytes } from "@/lib/files";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -64,13 +66,27 @@ export async function POST(request: Request) {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const transcript = await transcribe(openai, audio, input);
     const inferredIntake = await extractIntake(openai, input, transcript);
-    const draft = await generateDraft(openai, inferredIntake, transcript);
+    const generatedDraft = await generateDraft(openai, inferredIntake, transcript);
+    const draft = normalizeDraft({ ...generatedDraft, transcript }, inferredIntake);
+    let warning = "";
+
+    try {
+      const illustration = await generateStorybookIllustration(openai, draft, authToken);
+      draft.illustrationStorageId = illustration.storageId;
+      draft.illustrationUrl = illustration.url;
+    } catch (error) {
+      warning =
+        error instanceof Error
+          ? `The story was created, but its illustration could not be generated. ${error.message}`
+          : "The story was created, but its illustration could not be generated.";
+    }
 
     return NextResponse.json({
       intake: inferredIntake,
-      draft: normalizeDraft({ ...draft, transcript }, inferredIntake),
+      draft,
       model: process.env.OPENAI_TEXT_MODEL || "gpt-5-mini",
-      elapsedMs: Date.now() - startedAt
+      elapsedMs: Date.now() - startedAt,
+      warning
     });
   } catch (error) {
     const message =
@@ -78,6 +94,66 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function generateStorybookIllustration(
+  openai: OpenAI,
+  draft: ReturnType<typeof normalizeDraft>,
+  authToken: string | null
+) {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl || !authToken) {
+    throw new Error("Sign in again to save the generated illustration.");
+  }
+
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare";
+  const result = await openai.images.generate({
+    model,
+    prompt: buildStorybookImagePrompt(draft),
+    size: "1024x1024",
+    quality: "medium",
+    background: "opaque",
+    output_format: "webp",
+    n: 1
+  });
+  const encodedImage = result.data?.[0]?.b64_json;
+  if (!encodedImage) {
+    throw new Error("The image model returned no artwork.");
+  }
+
+  const imageBytes = Buffer.from(encodedImage, "base64");
+  const convex = new ConvexHttpClient(convexUrl);
+  convex.setAuth(authToken);
+  const uploadUrl = await convex.mutation(api.files.generateUploadUrl, {});
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "POST",
+    headers: { "Content-Type": "image/webp" },
+    body: imageBytes
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error("The generated illustration could not be stored.");
+  }
+
+  const upload = (await uploadResponse.json()) as { storageId?: Id<"_storage"> };
+  if (!upload.storageId) {
+    throw new Error("Image storage did not return an id.");
+  }
+
+  await convex.mutation(api.files.recordStorybookImage, {
+    storageId: upload.storageId,
+    contentType: "image/webp",
+    size: imageBytes.byteLength,
+    model
+  });
+  const url = await convex.query(api.files.getStorybookImageUrl, {
+    storageId: upload.storageId
+  });
+  if (!url) {
+    throw new Error("The stored illustration could not be loaded.");
+  }
+
+  return { storageId: String(upload.storageId), url };
 }
 
 function readIntake(formData: FormData): IntakePayload {

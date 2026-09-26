@@ -67,6 +67,60 @@ export const getUrl = query({
   }
 });
 
+export const recordStorybookImage = mutation({
+  args: {
+    storageId: v.id("_storage"),
+    contentType: v.string(),
+    size: v.number(),
+    model: v.string()
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await requireAuthUserId(ctx);
+    const existing = await ctx.db
+      .query("storybookImages")
+      .withIndex("by_storage_id", (q) => q.eq("storageId", args.storageId))
+      .unique();
+
+    if (existing) {
+      if (existing.userId !== userId) {
+        throw new Error("This storybook image belongs to another user.");
+      }
+      return null;
+    }
+
+    await ctx.db.insert("storybookImages", {
+      userId,
+      storageId: args.storageId,
+      contentType: args.contentType,
+      size: args.size,
+      model: args.model,
+      createdAt: Date.now()
+    });
+    return null;
+  }
+});
+
+export const getStorybookImageUrl = query({
+  args: {
+    storageId: v.id("_storage")
+  },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    const userId = await requireAuthUserId(ctx);
+    const image = await ctx.db
+      .query("storybookImages")
+      .withIndex("by_storage_id", (q) => q.eq("storageId", args.storageId))
+      .unique();
+
+    if (!image || image.userId !== userId) {
+      throw new Error("Generated image could not be found for this user.");
+    }
+
+    return await ctx.storage.getUrl(args.storageId);
+  }
+});
+
 async function requireAuthUserId(ctx: MutationCtx | QueryCtx) {
   const userId = await getAuthUserId(ctx);
   if (!userId) {

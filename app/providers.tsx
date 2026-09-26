@@ -195,8 +195,15 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
         await failed({ id: id as never, error });
       },
       publishStoryPage: async (draft, runId) => {
+        const { illustrationStorageId, illustrationUrl, ...publishableDraft } = draft;
+        void illustrationUrl;
         return await publish({
-          draft,
+          draft: {
+            ...publishableDraft,
+            illustrationStorageId: illustrationStorageId
+              ? (illustrationStorageId as Id<"_storage">)
+              : undefined
+          },
           runId: runId ? (runId as Id<"runs">) : undefined
         });
       },

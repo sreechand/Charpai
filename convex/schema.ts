@@ -62,6 +62,17 @@ export default defineSchema({
     .index("by_storage_id", ["storageId"])
     .index("by_user_id", ["userId"]),
 
+  storybookImages: defineTable({
+    userId: v.id("users"),
+    storageId: v.id("_storage"),
+    contentType: v.string(),
+    size: v.number(),
+    model: v.string(),
+    createdAt: v.number()
+  })
+    .index("by_storage_id", ["storageId"])
+    .index("by_user_id", ["userId"]),
+
   storybookPages: defineTable({
     ownerId: v.id("users"),
     runId: v.optional(v.id("runs")),
@@ -76,6 +87,7 @@ export default defineSchema({
     illustrationBrief: v.string(),
     stampSubject: v.string(),
     stampMotifs: v.array(v.string()),
+    illustrationStorageId: v.optional(v.id("_storage")),
     photoCaptions: v.array(v.string()),
     designSystem: charpaiDraftDesign,
     createdAt: v.number(),

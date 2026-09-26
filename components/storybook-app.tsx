@@ -97,7 +97,14 @@ const generationStages = [
     label: "Shaping the storybook",
     buttonLabel: "Writing story",
     detail: "Turning the interview into an editable family keepsake.",
-    progress: 91
+    progress: 82
+  },
+  {
+    id: "illustrating",
+    label: "Creating the memory image",
+    buttonLabel: "Creating image",
+    detail: "Making a story-specific rubber-stamp impression for the finished page.",
+    progress: 94
   }
 ] as const;
 
@@ -183,7 +190,8 @@ export function StorybookApp() {
       generationTimersRef.current = [
         setTimeout(() => setGenerationStageId("transcribing"), 2500),
         setTimeout(() => setGenerationStageId("understanding"), 22000),
-        setTimeout(() => setGenerationStageId("writing"), 36000)
+        setTimeout(() => setGenerationStageId("writing"), 36000),
+        setTimeout(() => setGenerationStageId("illustrating"), 52000)
       ];
       const requestPayload = { input: intake, audioStorageId };
       const fallbackBody = new FormData();
@@ -1050,28 +1058,37 @@ function StampPoster({ draft }: { draft: StorybookDraft }) {
 
   return (
     <section className="field-note-poster" aria-label={draft.illustrationBrief || draft.stampSubject}>
-      <svg className="stamp-scene" viewBox="0 0 360 360" role="img" aria-hidden="true">
-        <defs>
-          <filter id={roughId}>
-            <feTurbulence
-              type="fractalNoise"
-              baseFrequency="0.9"
-              numOctaves="2"
-              seed="8"
-              result="noise"
+      {draft.illustrationUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          className="generated-story-image"
+          src={draft.illustrationUrl}
+          alt={draft.illustrationBrief || draft.stampSubject}
+        />
+      ) : (
+        <svg className="stamp-scene" viewBox="0 0 360 360" role="img" aria-hidden="true">
+          <defs>
+            <filter id={roughId}>
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency="0.9"
+                numOctaves="2"
+                seed="8"
+                result="noise"
+              />
+              <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" />
+            </filter>
+          </defs>
+          <g className="stamp-impression" filter={`url(#${roughId})`}>
+            <path
+              className="stamp-ghost"
+              d="M50 295c44-16 82-18 118-7 42 13 81 8 137-16"
             />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" />
-          </filter>
-        </defs>
-        <g className="stamp-impression" filter={`url(#${roughId})`}>
-          <path
-            className="stamp-ghost"
-            d="M50 295c44-16 82-18 118-7 42 13 81 8 137-16"
-          />
-          {stampKinds.map((kind, index) => renderStampShape(kind, index))}
-          <path className="stamp-dark" d="M44 292c52 10 108 7 156-4 42-10 73-9 113 3" />
-        </g>
-      </svg>
+            {stampKinds.map((kind, index) => renderStampShape(kind, index))}
+            <path className="stamp-dark" d="M44 292c52 10 108 7 156-4 42-10 73-9 113 3" />
+          </g>
+        </svg>
+      )}
     </section>
   );
 }

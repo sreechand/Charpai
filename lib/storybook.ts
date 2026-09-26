@@ -30,6 +30,8 @@ export type StorybookDraft = {
   illustrationBrief: string;
   stampSubject: string;
   stampMotifs: string[];
+  illustrationStorageId: string;
+  illustrationUrl: string;
   photoCaptions: string[];
   designSystem: CharpaiDraftDesign;
 };
@@ -103,6 +105,8 @@ export function emptyDraft(): StorybookDraft {
     illustrationBrief: "",
     stampSubject: "",
     stampMotifs: [],
+    illustrationStorageId: "",
+    illustrationUrl: "",
     photoCaptions: [],
     designSystem: defaultCharpaiDraftDesign()
   };
@@ -132,6 +136,8 @@ export function demoDraft(input: Partial<IntakePayload> = {}): StorybookDraft {
     illustrationBrief: `A small rubber-stamp field note of ${originPlace}, using only a market arch, a coffee tumbler, a winding lane, and a family doorway on uncoated paper.`,
     stampSubject: `${originPlace} family memory`,
     stampMotifs: ["market arch", "filter coffee tumbler", "winding lane", "family doorway"],
+    illustrationStorageId: "",
+    illustrationUrl: "",
     photoCaptions: [
       `${elderName} and the people who make this story worth saving.`,
       `A place, object, or face that brings the memory back.`,
@@ -188,6 +194,8 @@ export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {
     stampMotifs: Array.isArray(source.stampMotifs)
       ? source.stampMotifs.map((motif) => String(motif)).slice(0, 6)
       : fallback.stampMotifs,
+    illustrationStorageId: stringOr(source.illustrationStorageId, fallback.illustrationStorageId),
+    illustrationUrl: stringOr(source.illustrationUrl, fallback.illustrationUrl),
     photoCaptions: Array.isArray(source.photoCaptions)
       ? source.photoCaptions.map((caption) => String(caption)).slice(0, 3)
       : fallback.photoCaptions,
