@@ -327,7 +327,8 @@ Return only valid JSON with this exact shape:
 }
 
 Rules:
-- First determine the dominant language and script used in the transcript. Write the title, subtitle, dedication, languageNote, section headings, section bodies, closingNote and photoCaptions in that same language and script.
+- First determine the dominant language and script from the transcript itself. The transcript overrides the supplied "Languages in audio" field if they conflict.
+- If the transcript is predominantly English, write every natural-language output field in English, including the title, subtitle, dedication, languageNote, section headings and bodies, closingNote, illustration fields, photo captions, and design-system descriptions. Preserve proper nouns and family terms in their original form.
 - If the transcript is Hindi, Tamil, Telugu, or another non-English language, do not translate the storybook into English.
 - If the transcript naturally mixes languages, preserve the same kind of code-switching and keep original family phrases, foods, places and relationship terms.
 - Do not invent major life events that are not in the transcript.

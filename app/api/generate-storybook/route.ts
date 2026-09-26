@@ -431,7 +431,7 @@ async function generateDraft(openai: OpenAI, input: IntakePayload, transcript: s
   const response = await openai.responses.create({
     model,
     instructions:
-      "You are a careful family-history editor. You turn interview transcripts into truthful, warm, short storybooks. Return only valid JSON.",
+      "You are a careful family-history editor. You turn interview transcripts into truthful, warm, short storybooks. The transcript is the source of truth for output language: an English transcript must produce an English story. Return only valid JSON.",
     input: buildStoryPrompt(input, transcript)
   });
 
