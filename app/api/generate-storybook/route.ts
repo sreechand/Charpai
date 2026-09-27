@@ -28,14 +28,45 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
 export const runtime = "nodejs";
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
 
   try {
     const authToken = readBearerToken(request.headers.get("authorization"));
-    const { input, audio } = await readRequest(request, authToken);
+    const { stage, input, audio, transcript: suppliedTranscript } = await readRequest(
+      request,
+      authToken
+    );
+
+    if (!process.env.OPENAI_API_KEY) {
+      if (stage === "transcribe") {
+        return NextResponse.json({
+          transcript: "Demo transcript placeholder.",
+          model: "demo-mode",
+          elapsedMs: Date.now() - startedAt
+        });
+      }
+      const inferredIntake = demoIntake(input);
+      const draft = demoDraft(inferredIntake);
+      return NextResponse.json({
+        intake: inferredIntake,
+        draft,
+        model: "demo-mode",
+        elapsedMs: Date.now() - startedAt,
+        warning: "OPENAI_API_KEY is missing, so this is a demo draft."
+      });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    if (stage === "compose") {
+      if (!suppliedTranscript) {
+        return NextResponse.json({ error: "A transcript is required to create the storybook." }, { status: 400 });
+      }
+      return await composeStorybook(openai, input, suppliedTranscript, authToken, startedAt);
+    }
 
     if (!(audio instanceof File)) {
       return NextResponse.json(
@@ -51,20 +82,31 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      const inferredIntake = demoIntake(input);
-      const draft = demoDraft(inferredIntake);
+    const transcript = await transcribe(openai, audio, input);
+    if (stage === "transcribe") {
       return NextResponse.json({
-        intake: inferredIntake,
-        draft,
-        model: "demo-mode",
-        elapsedMs: Date.now() - startedAt,
-        warning: "OPENAI_API_KEY is missing, so this is a demo draft."
+        transcript,
+        model: "gpt-4o-transcribe-diarize",
+        elapsedMs: Date.now() - startedAt
       });
     }
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const transcript = await transcribe(openai, audio, input);
+    return await composeStorybook(openai, input, transcript, authToken, startedAt);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Something failed while generating the storybook.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+async function composeStorybook(
+  openai: OpenAI,
+  input: IntakePayload,
+  transcript: string,
+  authToken: string | null,
+  startedAt: number
+) {
     const inferredIntake = await extractIntake(openai, input, transcript);
     const generatedDraft = await generateDraft(openai, inferredIntake, transcript);
     const draft = normalizeDraft({ ...generatedDraft, transcript }, inferredIntake);
@@ -88,12 +130,6 @@ export async function POST(request: Request) {
       elapsedMs: Date.now() - startedAt,
       warning
     });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Something failed while generating the storybook.";
-
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
 }
 
 async function generateStorybookIllustration(
@@ -178,26 +214,41 @@ function getText(formData: FormData, key: keyof IntakePayload) {
 async function readRequest(
   request: Request,
   authToken: string | null
-): Promise<{ input: IntakePayload; audio: File | null }> {
+): Promise<{
+  stage: "full" | "transcribe" | "compose";
+  input: IntakePayload;
+  audio: File | null;
+  transcript: string;
+}> {
   const contentType = request.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     const payload = (await request.json()) as {
       input?: Partial<IntakePayload>;
       audioStorageId?: Id<"_storage">;
+      stage?: unknown;
+      transcript?: unknown;
     };
 
     return {
+      stage: readGenerationStage(payload.stage),
       input: readJsonIntake(payload.input || {}),
-      audio: payload.audioStorageId ? await readStoredAudio(payload.audioStorageId, authToken) : null
+      audio: payload.audioStorageId ? await readStoredAudio(payload.audioStorageId, authToken) : null,
+      transcript: typeof payload.transcript === "string" ? payload.transcript.trim() : ""
     };
   }
 
   const formData = await request.formData();
   const audio = formData.get("audio");
   return {
+    stage: readGenerationStage(formData.get("stage")),
     input: readIntake(formData),
-    audio: audio instanceof File ? audio : null
+    audio: audio instanceof File ? audio : null,
+    transcript: ""
   };
+}
+
+function readGenerationStage(value: unknown): "full" | "transcribe" | "compose" {
+  return value === "transcribe" || value === "compose" ? value : "full";
 }
 
 function readJsonIntake(input: Partial<IntakePayload>): IntakePayload {

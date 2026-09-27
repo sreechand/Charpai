@@ -48,6 +48,7 @@ const initialIntake: IntakePayload = {
 type GenerateResponse = {
   draft?: StorybookDraft;
   intake?: IntakePayload;
+  transcript?: string;
   error?: string;
   warning?: string;
   model?: string;
@@ -193,12 +194,13 @@ export function StorybookApp() {
         setTimeout(() => setGenerationStageId("writing"), 36000),
         setTimeout(() => setGenerationStageId("illustrating"), 52000)
       ];
-      const requestPayload = { input: intake, audioStorageId };
+      const requestPayload = { stage: "transcribe", input: intake, audioStorageId };
       const fallbackBody = new FormData();
       Object.entries(requestPayload.input).forEach(([key, value]) => fallbackBody.append(key, value));
+      fallbackBody.append("stage", "transcribe");
       fallbackBody.append("audio", audio as File);
 
-      const response = await fetch("/api/generate-storybook", audioStorageId
+      const transcriptionResponse = await fetch("/api/generate-storybook", audioStorageId
         ? {
             method: "POST",
             headers: {
@@ -211,6 +213,33 @@ export function StorybookApp() {
             method: "POST",
             body: fallbackBody
           });
+      const transcriptionResult = (await readGenerateResponse(
+        transcriptionResponse
+      )) as GenerateResponse;
+
+      if (!transcriptionResponse.ok || !transcriptionResult.transcript) {
+        throw new Error(transcriptionResult.error || "The interview could not be transcribed.");
+      }
+
+      clearGenerationTimers(generationTimersRef.current);
+      setGenerationStageId("understanding");
+      generationTimersRef.current = [
+        setTimeout(() => setGenerationStageId("writing"), 5000),
+        setTimeout(() => setGenerationStageId("illustrating"), 20000)
+      ];
+
+      const response = await fetch("/api/generate-storybook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.authToken}`
+        },
+        body: JSON.stringify({
+          stage: "compose",
+          input: intake,
+          transcript: transcriptionResult.transcript
+        })
+      });
       const result = (await readGenerateResponse(response)) as GenerateResponse;
 
       if (!response.ok || !result.draft) {
@@ -223,7 +252,7 @@ export function StorybookApp() {
         draft: result.draft,
         audioStorageId,
         model: result.model || "model",
-        elapsedMs: result.elapsedMs || 1000,
+        elapsedMs: (transcriptionResult.elapsedMs || 0) + (result.elapsedMs || 1000),
         warning: result.warning || ""
       });
       setWarning("");
