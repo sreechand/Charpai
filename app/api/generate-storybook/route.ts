@@ -8,7 +8,7 @@ import { ConvexHttpClient } from "convex/browser";
 import ffmpegStatic from "ffmpeg-static";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -242,45 +242,55 @@ async function readStoredAudio(storageId: Id<"_storage">, authToken: string | nu
 }
 
 async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
-  const compressedAudio = await compressAudioForTranscription(audio);
+  const audioSegments = await prepareAudioForTranscription(audio);
+  const transcripts = await Promise.all(
+    audioSegments.map(async (segment, index) => {
+      try {
+        return await transcribeSegment(openai, segment, input);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const status = error && typeof error === "object" && "status" in error ? error.status : null;
+        if (status === 413 || message.includes("25 MB")) {
+          throw new Error(
+            `Audio segment ${index + 1} exceeded the transcription upload limit after preparation.`
+          );
+        }
+        throw error;
+      }
+    })
+  );
 
-  try {
-    // The current SDK response overload omits diarized_json even though its
-    // runtime type is exported and the API supports it.
-    const transcription = (await openai.audio.transcriptions.create({
-      file: compressedAudio,
-      model: "gpt-4o-transcribe-diarize",
-      response_format: "diarized_json",
-      chunking_strategy: "auto"
-    })) as unknown as TranscriptionDiarized;
+  return transcripts.filter(Boolean).join("\n\n");
+}
 
-    const segments = transcription.segments.filter((segment) => segment.text.trim());
-    const speakers = new Set(segments.map((segment) => segment.speaker));
-    if (speakers.size < 2) {
-      return await transcribeWithoutDiarization(openai, compressedAudio, input);
-    }
+async function transcribeSegment(openai: OpenAI, audio: File, input: IntakePayload) {
+  // The current SDK response overload omits diarized_json even though its
+  // runtime type is exported and the API supports it.
+  const transcription = (await openai.audio.transcriptions.create({
+    file: audio,
+    model: "gpt-4o-transcribe-diarize",
+    response_format: "diarized_json",
+    chunking_strategy: "auto"
+  })) as unknown as TranscriptionDiarized;
 
-    const intervieweeSpeaker = await identifyIntervieweeSpeaker(openai, segments, input);
-    const intervieweeTranscript = segments
-      .filter((segment) => segment.speaker === intervieweeSpeaker)
-      .map((segment) => segment.text.trim())
-      .filter(Boolean)
-      .join("\n");
-
-    if (!intervieweeTranscript) {
-      throw new Error("The interviewee's speech could not be isolated from the recording.");
-    }
-
-    return intervieweeTranscript;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message.includes("25 MB") || message.includes("maximum") || message.includes("too large")) {
-      throw new Error(
-        "The recording uploaded, but the transcription model could not process it. Compress the audio to mp3/m4a or trim it to the strongest 10 minutes."
-      );
-    }
-    throw error;
+  const segments = transcription.segments.filter((segment) => segment.text.trim());
+  const speakers = new Set(segments.map((segment) => segment.speaker));
+  if (speakers.size < 2) {
+    return await transcribeWithoutDiarization(openai, audio, input);
   }
+
+  const intervieweeSpeaker = await identifyIntervieweeSpeaker(openai, segments, input);
+  const intervieweeTranscript = segments
+    .filter((segment) => segment.speaker === intervieweeSpeaker)
+    .map((segment) => segment.text.trim())
+    .filter(Boolean)
+    .join("\n");
+
+  if (!intervieweeTranscript) {
+    throw new Error("The interviewee's speech could not be isolated from the recording.");
+  }
+
+  return intervieweeTranscript;
 }
 
 async function transcribeWithoutDiarization(
@@ -361,10 +371,10 @@ function formatTimestamp(seconds: number) {
   return `${minutes}:${remainder.toString().padStart(2, "0")}`;
 }
 
-async function compressAudioForTranscription(audio: File) {
+async function prepareAudioForTranscription(audio: File) {
   const tempDir = await mkdtemp(path.join(tmpdir(), "storybook-audio-"));
   const inputPath = path.join(tempDir, `source-${randomUUID()}${extensionFor(audio)}`);
-  const outputPath = path.join(tempDir, "transcription.mp3");
+  const outputPattern = path.join(tempDir, "transcription-%03d.mp3");
 
   try {
     await writeFile(inputPath, Buffer.from(await audio.arrayBuffer()));
@@ -386,18 +396,35 @@ async function compressAudioForTranscription(audio: File) {
       "libmp3lame",
       "-b:a",
       "32k",
-      outputPath
+      "-f",
+      "segment",
+      "-segment_time",
+      "2700",
+      "-reset_timestamps",
+      "1",
+      outputPattern
     ]);
 
-    const compressed = await readFile(outputPath);
-    if (compressed.byteLength > 24 * 1024 * 1024) {
-      throw new Error(
-        "The compressed recording is still too long for transcription. Trim it into shorter interviews and try again."
-      );
+    const segmentNames = (await readdir(tempDir))
+      .filter((name) => /^transcription-\d{3}\.mp3$/.test(name))
+      .sort();
+    if (!segmentNames.length) {
+      throw new Error("Audio conversion produced no playable segments.");
     }
-    return new File([compressed], replaceExtension(audio.name || "interview-audio", "mp3"), {
-      type: "audio/mpeg"
-    });
+
+    return await Promise.all(
+      segmentNames.map(async (segmentName, index) => {
+        const segment = await readFile(path.join(tempDir, segmentName));
+        if (segment.byteLength > 20 * 1000 * 1000) {
+          throw new Error(`Prepared audio segment ${index + 1} is unexpectedly large.`);
+        }
+        return new File(
+          [segment],
+          `${path.parse(audio.name || "interview-audio").name}-part-${index + 1}.mp3`,
+          { type: "audio/mpeg" }
+        );
+      })
+    );
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unknown audio conversion failure.";
     throw new Error(`Audio preparation failed before transcription. ${detail}`);
@@ -428,11 +455,6 @@ function extensionFor(file: File) {
     return ".flac";
   }
   return ".audio";
-}
-
-function replaceExtension(fileName: string, nextExtension: string) {
-  const parsed = path.parse(fileName);
-  return `${parsed.name || "interview-audio"}.${nextExtension}`;
 }
 
 async function runFfmpeg(args: string[]) {
