@@ -2,7 +2,6 @@
 
 import {
   AlertTriangle,
-  BookOpen,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -11,13 +10,13 @@ import {
   LogOut,
   Mail,
   Loader2,
-  Mic,
   Printer,
   Sparkles,
   Trash2,
   Upload,
   UserCircle
 } from "lucide-react";
+import Image from "next/image";
 import {
   useEffect,
   useId,
@@ -31,6 +30,7 @@ import {
 import { useAuthSession, useEvidence, type StorybookPageSummary } from "@/app/providers";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
+import charpaiLogo from "@/charpai_text.png";
 import {
   blankIntake,
   demoDraft,
@@ -453,23 +453,16 @@ export function StorybookApp() {
     <main className="app-shell">
       <section className="masthead screen-only">
         <div>
-          <p className="eyebrow">Charpai</p>
-          <h1>Charpai</h1>
+          <h1 className="visually-hidden">Charpai</h1>
+          <div className="brand-logo-crop" aria-hidden="true">
+            <Image className="brand-logo" src={charpaiLogo} alt="" priority />
+          </div>
           <p className="masthead-copy">
             Upload an interview recording. Charpai extracts the family details, drafts the first
             storybook spread, and keeps every line editable before export.
           </p>
         </div>
-        <div className="proof-strip" aria-label="Storybook constraints">
-          <span>
-            <UserCircle size={16} aria-hidden /> {auth.status === "authenticated" ? "Signed in" : "Login required"}
-          </span>
-          <span>
-            <Mic size={16} aria-hidden /> Audio first
-          </span>
-          <span>
-            <BookOpen size={16} aria-hidden /> Editable spread
-          </span>
+        <div className="proof-strip" aria-label="Account actions">
           {auth.status === "authenticated" ? (
             <button className="session-button" type="button" onClick={() => void auth.signOut()}>
               <LogOut size={16} aria-hidden />

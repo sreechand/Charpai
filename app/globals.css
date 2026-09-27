@@ -135,6 +135,34 @@ textarea {
   text-wrap: balance;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.brand-logo-crop {
+  position: relative;
+  width: 300px;
+  height: 76px;
+  overflow: hidden;
+}
+
+.brand-logo {
+  position: absolute;
+  top: -184px;
+  left: -117px;
+  width: 494px;
+  height: auto;
+  max-width: none;
+}
+
 .masthead-copy {
   max-width: 710px;
   margin: 0;
@@ -1363,6 +1391,17 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  .brand-logo-crop {
+    width: 240px;
+    height: 61px;
+  }
+
+  .brand-logo {
+    top: -147px;
+    left: -94px;
+    width: 395px;
+  }
+
   .field-grid,
   .upload-zone,
   .action-row,
