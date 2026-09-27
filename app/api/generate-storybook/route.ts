@@ -399,7 +399,7 @@ async function prepareAudioForTranscription(audio: File) {
       "-f",
       "segment",
       "-segment_time",
-      "2700",
+      "1200",
       "-reset_timestamps",
       "1",
       outputPattern
