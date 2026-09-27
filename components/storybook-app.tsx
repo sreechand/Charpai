@@ -252,6 +252,7 @@ export function StorybookApp() {
     const warnings = accepted.warning ? [accepted.warning] : [];
     let runId: string | null = null;
     let publishedPath = "";
+    let hereNowUrl = "";
 
     setIsPublishing(true);
     setMessage("");
@@ -282,6 +283,27 @@ export function StorybookApp() {
       const page = await evidence.publishStoryPage(accepted.draft, runId || undefined);
       if (page) {
         publishedPath = `/s/${page.slug}`;
+        try {
+          const response = await fetch("/api/publish-storybook", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${auth.authToken}`
+            },
+            body: JSON.stringify({ slug: page.slug })
+          });
+          const result = (await response.json()) as { url?: string; error?: string };
+          if (!response.ok || !result.url) {
+            throw new Error(result.error || "here.now could not publish the storybook.");
+          }
+          hereNowUrl = result.url;
+        } catch (error) {
+          warnings.push(
+            error instanceof Error
+              ? `The Charpai page was saved, but here.now failed: ${error.message}`
+              : "The Charpai page was saved, but here.now could not publish it."
+          );
+        }
       }
     } catch (error) {
       warnings.push(error instanceof Error ? error.message : "The storybook page could not be published.");
@@ -292,7 +314,9 @@ export function StorybookApp() {
     setStatus("ready");
     setWarning(warnings.join(" "));
     setMessage(
-      publishedPath
+      hereNowUrl
+        ? `Recommendations applied. Storybook published at ${hereNowUrl}.`
+        : publishedPath
         ? `Recommendations applied. Unlisted page published at ${publishedPath}.`
         : "Recommendations applied."
     );
