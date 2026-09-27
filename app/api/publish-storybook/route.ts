@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         versionId: created.upload.versionId,
         account: hereNowWorkspace,
-        label: storybookLabel(story.title)
+        label: storybookLabel(story.title, story.slug)
       })
     });
     const finalized = await readHereNowResponse<FinalizeResponse>(finalizeResponse);

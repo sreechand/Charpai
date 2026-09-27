@@ -41,14 +41,16 @@ export async function buildHereNowStorybookFiles(story: PublicStorybook): Promis
   return files;
 }
 
-export function storybookLabel(title: string) {
-  const label = title
+export function storybookLabel(title: string, storySlug: string) {
+  const titleLabel = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48)
     .replace(/-+$/g, "");
-  return label.length >= 2 ? label : "family-story";
+  const base = titleLabel.length >= 2 ? titleLabel : "family-story";
+  const uniqueSuffix = storySlug.split("-").at(-1)?.slice(-8) || "storybook";
+  return `${base}-${uniqueSuffix}`;
 }
 
 function renderStorybookHtml(story: PublicStorybook, illustrationPath: string) {
