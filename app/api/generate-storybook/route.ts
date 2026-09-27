@@ -242,7 +242,7 @@ async function readStoredAudio(storageId: Id<"_storage">, authToken: string | nu
 }
 
 async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
-  const compressedAudio = await compressAudioLosslessly(audio);
+  const compressedAudio = await compressAudioForTranscription(audio);
 
   try {
     // The current SDK response overload omits diarized_json even though its
@@ -361,10 +361,10 @@ function formatTimestamp(seconds: number) {
   return `${minutes}:${remainder.toString().padStart(2, "0")}`;
 }
 
-async function compressAudioLosslessly(audio: File) {
+async function compressAudioForTranscription(audio: File) {
   const tempDir = await mkdtemp(path.join(tmpdir(), "storybook-audio-"));
   const inputPath = path.join(tempDir, `source-${randomUUID()}${extensionFor(audio)}`);
-  const outputPath = path.join(tempDir, "transcription.flac");
+  const outputPath = path.join(tempDir, "transcription.mp3");
 
   try {
     await writeFile(inputPath, Buffer.from(await audio.arrayBuffer()));
@@ -378,20 +378,29 @@ async function compressAudioLosslessly(audio: File) {
       "-map",
       "0:a:0",
       "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
       "-c:a",
-      "flac",
-      "-compression_level",
-      "12",
+      "libmp3lame",
+      "-b:a",
+      "32k",
       outputPath
     ]);
 
     const compressed = await readFile(outputPath);
-    return new File([compressed], replaceExtension(audio.name || "interview-audio", "flac"), {
-      type: "audio/flac"
+    if (compressed.byteLength > 24 * 1024 * 1024) {
+      throw new Error(
+        "The compressed recording is still too long for transcription. Trim it into shorter interviews and try again."
+      );
+    }
+    return new File([compressed], replaceExtension(audio.name || "interview-audio", "mp3"), {
+      type: "audio/mpeg"
     });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "Unknown compression failure.";
-    throw new Error(`Lossless audio compression failed before transcription. ${detail}`);
+    const detail = error instanceof Error ? error.message : "Unknown audio conversion failure.";
+    throw new Error(`Audio preparation failed before transcription. ${detail}`);
   } finally {
     await rm(tempDir, { force: true, recursive: true });
   }
