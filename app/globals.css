@@ -147,20 +147,45 @@ textarea {
   border: 0;
 }
 
-.brand-logo-crop {
+.brand-logo-lockup {
   position: relative;
   width: 300px;
-  height: 76px;
+  height: 154px;
   overflow: hidden;
+  transition: height 280ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .brand-logo {
   position: absolute;
-  top: -184px;
-  left: -117px;
-  width: 494px;
+  inset: 0 auto auto 0;
+  width: 300px;
   height: auto;
   max-width: none;
+  transition: opacity 220ms ease, transform 280ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.brand-logo-with-bed {
+  opacity: 1;
+}
+
+.brand-logo-sans-bed {
+  opacity: 0;
+}
+
+.brand-logo-lockup.is-compact {
+  height: 72px;
+}
+
+.brand-logo-lockup.is-compact .brand-logo {
+  transform: translateY(-82px);
+}
+
+.brand-logo-lockup.is-compact .brand-logo-with-bed {
+  opacity: 0;
+}
+
+.brand-logo-lockup.is-compact .brand-logo-sans-bed {
+  opacity: 1;
 }
 
 .masthead-copy {
@@ -1391,15 +1416,21 @@ textarea {
 }
 
 @media (max-width: 640px) {
-  .brand-logo-crop {
+  .brand-logo-lockup {
     width: 240px;
-    height: 61px;
+    height: 123px;
   }
 
   .brand-logo {
-    top: -147px;
-    left: -94px;
-    width: 395px;
+    width: 240px;
+  }
+
+  .brand-logo-lockup.is-compact {
+    height: 58px;
+  }
+
+  .brand-logo-lockup.is-compact .brand-logo {
+    transform: translateY(-65px);
   }
 
   .field-grid,
@@ -1454,6 +1485,13 @@ textarea {
 
   .story-section-heading {
     font-size: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo-lockup,
+  .brand-logo {
+    transition: none;
   }
 }
 

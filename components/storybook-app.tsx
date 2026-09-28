@@ -30,7 +30,8 @@ import {
 import { useAuthSession, useEvidence, type StorybookPageSummary } from "@/app/providers";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
-import charpaiLogo from "@/charpai_text.png";
+import charpaiSansBedLogo from "@/charpai_sans_bed.png";
+import charpaiWithBedLogo from "@/charpai_with_bed.png";
 import {
   blankIntake,
   demoDraft,
@@ -125,6 +126,7 @@ export function StorybookApp() {
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isBrandCompact, setIsBrandCompact] = useState(false);
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [generationStageId, setGenerationStageId] =
     useState<GenerationStageId>("uploading");
@@ -137,6 +139,13 @@ export function StorybookApp() {
 
   useEffect(() => {
     return () => clearGenerationTimers(generationTimersRef.current);
+  }, []);
+
+  useEffect(() => {
+    const updateBrand = () => setIsBrandCompact(window.scrollY > 56);
+    updateBrand();
+    window.addEventListener("scroll", updateBrand, { passive: true });
+    return () => window.removeEventListener("scroll", updateBrand);
   }, []);
 
   const fieldsNeedReview = useMemo(
@@ -454,8 +463,22 @@ export function StorybookApp() {
       <section className="masthead screen-only">
         <div>
           <h1 className="visually-hidden">Charpai</h1>
-          <div className="brand-logo-crop" aria-hidden="true">
-            <Image className="brand-logo" src={charpaiLogo} alt="" priority />
+          <div
+            className={`brand-logo-lockup${isBrandCompact ? " is-compact" : ""}`}
+            aria-hidden="true"
+          >
+            <Image
+              className="brand-logo brand-logo-with-bed"
+              src={charpaiWithBedLogo}
+              alt=""
+              priority
+            />
+            <Image
+              className="brand-logo brand-logo-sans-bed"
+              src={charpaiSansBedLogo}
+              alt=""
+              priority
+            />
           </div>
           <p className="masthead-copy">
             Upload an interview recording. Charpai extracts the family details, drafts the first
