@@ -30,8 +30,7 @@ import {
 import { useAuthSession, useEvidence, type StorybookPageSummary } from "@/app/providers";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
-import charpaiSansBedLogo from "@/charpai_sans_bed.png";
-import charpaiWithBedLogo from "@/charpai_with_bed.png";
+import charpaiLogo from "@/charpaiv8.png";
 import {
   blankIntake,
   demoDraft,
@@ -468,14 +467,8 @@ export function StorybookApp() {
             aria-hidden="true"
           >
             <Image
-              className="brand-logo brand-logo-with-bed"
-              src={charpaiWithBedLogo}
-              alt=""
-              priority
-            />
-            <Image
-              className="brand-logo brand-logo-sans-bed"
-              src={charpaiSansBedLogo}
+              className="brand-logo"
+              src={charpaiLogo}
               alt=""
               priority
             />
