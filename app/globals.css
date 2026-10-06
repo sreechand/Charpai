@@ -338,7 +338,6 @@ textarea {
   text-wrap: balance;
 }
 
-.google-button,
 .form-switch {
   display: inline-flex;
   align-items: center;
@@ -356,15 +355,41 @@ textarea {
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.google-button:hover:not(:disabled),
 .form-switch:hover:not(:disabled) {
   background: var(--paper);
 }
 
-.google-button:active,
 .form-switch:active {
   transform: scale(0.98);
 }
+
+@font-face {
+  font-family: "Google Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/google-sans-medium.ttf") format("truetype");
+}
+
+.google-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #747775;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f1f1f;
+  font: 500 14px/20px "Google Sans", sans-serif;
+  cursor: pointer;
+}
+
+.google-button img { width: 20px; height: 20px; flex-shrink: 0; }
+.google-button:hover:not(:disabled) { background: #f8faff; box-shadow: 0 1px 2px rgba(60, 64, 67, .15); }
+.google-button:focus-visible { outline: 2px solid #4285f4; outline-offset: 3px; }
+.google-button:disabled { opacity: .6; cursor: default; }
 
 .auth-divider {
   display: flex;

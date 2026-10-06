@@ -12,8 +12,7 @@ import {
   Loader2,
   Printer,
   Sparkles,
-  Trash2,
-  UserCircle
+  Trash2
 } from "lucide-react";
 import Image from "next/image";
 import { AudioIntake } from "@/components/audio-intake";
@@ -973,8 +972,8 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
           disabled={isSubmitting || auth.status === "loading" || unavailable}
           onClick={handleGoogleSignIn}
         >
-          <UserCircle size={18} aria-hidden />
-          Continue with Google
+          <Image src="/google-g.png" alt="" width={20} height={20} aria-hidden />
+          <span>Continue with Google</span>
         </button>
 
         <div className="auth-divider">
