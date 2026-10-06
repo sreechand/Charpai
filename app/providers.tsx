@@ -118,7 +118,7 @@ function ConvexAuthBridge({ children }: { children: ReactNode }) {
       status: isLoading ? "loading" : isAuthenticated ? "authenticated" : "unauthenticated",
       authToken,
       signInWithGoogle: async () => {
-        const result = await signIn("google", { redirectTo: "/" });
+        const result = await signIn("google", { redirectTo: "/app" });
         if (result.redirect) {
           window.location.href = result.redirect.toString();
         }

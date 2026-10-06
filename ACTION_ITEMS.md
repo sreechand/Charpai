@@ -47,3 +47,11 @@ Items 1 and 8 overlap and were combined in the later build plan.
 - This checkpoint includes generation telemetry, recording updates, Razorpay checkout, automated checks, and project notes.
 - Destination: `main` in `sreechand/agara`. Local environment files remain ignored and are not included.
 - Pricing and the payment access rule remain the next product decision; pushing code does not deploy the app.
+
+## Landing page — 2026-10-07
+
+- Implemented the user's supplied Claude HTML export as the local homepage, preserving its visual direction and draft copy. Local assets include the logo and fonts.
+- Moved the existing storybook workspace to `/app` and connected the landing-page start/login links and Google sign-in return route.
+- Type checks, lint, and production build pass. Visual browser review remains pending because the computer-use tool denied access to Arc.
+- The user wants to inspect it locally before production. Draft pricing, language claims, interview guidance, printable-copy wording, and the missing social destination need review before release.
+- Notes: [Landing page](docs/LANDING_PAGE.md). Next: review `http://localhost:3000`.

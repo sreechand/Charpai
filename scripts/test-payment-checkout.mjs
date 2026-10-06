@@ -25,7 +25,7 @@ try {
       open() { window.mockCheckoutOpened = (window.mockCheckoutOpened || 0) + 1; }
     };
   });
-  await page.goto(process.env.PAYMENT_TEST_URL || 'http://localhost:3000');
+  await page.goto(process.env.PAYMENT_TEST_URL || 'http://localhost:3000/app');
   await page.getByRole('button', { name: 'Create an email account' }).click();
   await page.getByLabel('Email', { exact: true }).fill(`payment-browser-${randomUUID()}@example.invalid`);
   await page.getByLabel('Password', { exact: true }).fill(randomUUID() + randomUUID());
