@@ -11,6 +11,7 @@ export const acceptedAudioTypes = [
   "audio/x-m4a",
   "audio/wav",
   "audio/webm",
+  "audio/ogg",
   "video/mp4"
 ];
 
@@ -18,7 +19,11 @@ export const maxAudioBytes = 100 * 1024 * 1024;
 
 export function validateAudioFile(file: File | null) {
   if (!file) {
-    return "Upload one recording before generating the storybook.";
+    return "Record or upload one interview before generating the storybook.";
+  }
+
+  if (file.size === 0) {
+    return "The recording is empty. Record again or choose another file.";
   }
 
   if (file.size > maxAudioBytes) {
@@ -26,9 +31,9 @@ export function validateAudioFile(file: File | null) {
   }
 
   const lowerName = file.name.toLowerCase();
-  const extensionAllowed = /\.(mp3|m4a|mp4|wav|webm)$/.test(lowerName);
-  if (!acceptedAudioTypes.includes(file.type) && !extensionAllowed) {
-    return "Use an mp3, m4a, mp4, wav, or webm recording.";
+  const extensionAllowed = /\.(mp3|m4a|mp4|wav|webm|ogg)$/.test(lowerName);
+  if (!acceptedAudioTypes.includes(file.type.split(";")[0]) && !extensionAllowed) {
+    return "Use an mp3, m4a, mp4, wav, webm, or ogg recording.";
   }
 
   return "";

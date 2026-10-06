@@ -1556,3 +1556,21 @@ textarea {
     break-inside: avoid;
   }
 }
+
+.audio-intake { min-width: 0; grid-column: 1 / -1; }
+.audio-intake + .upload-card { grid-column: 1 / -1; }
+.audio-modes { display: flex; gap: 8px; margin-bottom: 12px; }
+.audio-modes button { display: flex; align-items: center; justify-content: center; gap: 7px; flex: 1; border: 1px solid var(--line-strong); border-radius: var(--radius-small); background: transparent; color: var(--ink); font: 13px var(--font-ui); padding: 8px; }
+.audio-modes button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.recorder-card, .recording-preview { padding: 16px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: rgba(237, 231, 216, 0.5); }
+.recorder-card p { margin: 0 0 10px; }
+.recorder-card small, .recording-preview small { display: block; color: var(--ink-soft); font: 12px/1.6 var(--font-ui); }
+.recorder-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 16px; }
+.recording-clock { font: 20px var(--font-ui); font-variant-numeric: tabular-nums; }
+.recording-clock.is-recording { color: var(--danger); }
+.recording-clock.is-recording::before { content: "●"; margin-right: 7px; font-size: 12px; }
+.recorder-notice { font: 13px/1.6 var(--font-ui); color: var(--ink-soft); }
+.recording-preview { margin-top: 12px; display: grid; gap: 10px; }
+.recording-preview > span { overflow-wrap: anywhere; font: 12px/1.5 var(--font-ui); }
+.recording-preview audio { width: 100%; min-width: 0; }
+.recording-preview a { justify-self: start; text-decoration: none; }

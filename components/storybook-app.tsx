@@ -13,10 +13,10 @@ import {
   Printer,
   Sparkles,
   Trash2,
-  Upload,
   UserCircle
 } from "lucide-react";
 import Image from "next/image";
+import { AudioIntake } from "@/components/audio-intake";
 import {
   useEffect,
   useId,
@@ -118,6 +118,7 @@ export function StorybookApp() {
   const generationTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const [intake, setIntake] = useState(initialIntake);
   const [audio, setAudio] = useState<File | null>(null);
+  const [isRecordingBusy, setIsRecordingBusy] = useState(false);
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
   const [draft, setDraft] = useState<StorybookDraft>(emptyDraft());
   const [pendingRecommendation, setPendingRecommendation] = useState<PendingRecommendation | null>(null);
@@ -155,14 +156,26 @@ export function StorybookApp() {
     [activeIntake.elderName, activeIntake.originPlace, activeIntake.relationship]
   );
 
+  // This only separates local recovery copies; authentication is still checked by the backend.
+  const recordingRecoveryKey = useMemo(() => {
+    try {
+      const payload = auth.authToken?.split(".")[1];
+      if (!payload) return "signed-out";
+      const subject = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))).sub;
+      return typeof subject === "string" ? subject.split("|")[0] : "signed-out";
+    } catch { return "signed-out"; }
+  }, [auth.authToken]);
+
   const canGenerate =
     Boolean(audio) &&
+    !isRecordingBusy &&
     status !== "generating" &&
     !hasPendingRecommendation &&
     auth.status === "authenticated" &&
     Boolean(auth.authToken);
 
   async function handleGenerate() {
+    if (isRecordingBusy) return;
     setMessage("");
     setWarning("");
     setPendingRecommendation(null);
@@ -474,13 +487,13 @@ export function StorybookApp() {
             />
           </div>
           <p className="masthead-copy">
-            Upload an interview recording. Charpai extracts the family details, drafts the first
+            Record an interview here or upload a recording. Charpai extracts the family details, drafts the first
             storybook spread, and keeps every line editable before export.
           </p>
         </div>
         <div className="proof-strip" aria-label="Account actions">
           {auth.status === "authenticated" ? (
-            <button className="session-button" type="button" onClick={() => void auth.signOut()}>
+            <button className="session-button" type="button" disabled={isRecordingBusy} onClick={() => { setAudio(null); void auth.signOut(); }}>
               <LogOut size={16} aria-hidden />
               Sign out
             </button>
@@ -497,22 +510,20 @@ export function StorybookApp() {
             <div>
               <p className="eyebrow">{activeDraft.sections.length ? "Review" : "Audio intake"}</p>
               <h2>
-                {activeDraft.sections.length ? "Extracted story details" : "Upload audio for preview"}
+                {activeDraft.sections.length ? "Extracted story details" : "Record an interview"}
               </h2>
             </div>
           </div>
 
           <div className="upload-zone">
-            <label className="upload-card">
-              <Upload size={22} aria-hidden />
-              <span>{audio ? audio.name : "Upload interview audio"}</span>
-              <small>mp3, m4a, wav, mp4 or webm. Keep it under 100 MB.</small>
-              <input
-                type="file"
-                accept="audio/*,video/mp4,.m4a,.mp3,.wav,.webm"
-                onChange={(event) => setAudio(event.target.files?.[0] || null)}
-              />
-            </label>
+            <AudioIntake
+              key={recordingRecoveryKey}
+              recoveryKey={recordingRecoveryKey}
+              audio={audio}
+              onChange={setAudio}
+              onBusyChange={setIsRecordingBusy}
+              disabled={status === "generating" || hasPendingRecommendation || isPublishing}
+            />
             <label className="upload-card">
               <ImagePlus size={22} aria-hidden />
               <span>{photos.length ? `${photos.length} photo previewed` : "Optional photos"}</span>
