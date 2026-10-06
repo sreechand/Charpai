@@ -28,6 +28,7 @@ import {
 } from "react";
 
 import { useAuthSession, useEvidence, type StorybookPageSummary } from "@/app/providers";
+import { RazorpayCheckout } from "@/components/razorpay-checkout";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
 import charpaiLogo from "@/charpaiv8.png";
@@ -123,6 +124,7 @@ export function StorybookApp() {
   const [draft, setDraft] = useState<StorybookDraft>(emptyDraft());
   const [pendingRecommendation, setPendingRecommendation] = useState<PendingRecommendation | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "reviewing" | "ready" | "failed">("idle");
+  const generationIdRef = useRef<string | undefined>(undefined);
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
@@ -197,11 +199,18 @@ export function StorybookApp() {
     setGenerationStageId("uploading");
     setStatus("generating");
 
+    const generationId = crypto.randomUUID();
+    generationIdRef.current = generationId;
+    const generationStartedAt = Date.now();
+    evidence.recordEvent("generation_started", { generationId });
+    evidence.recordEvent("upload_started", { generationId, bytes: audio?.size, contentType: audio?.type });
     let audioStorageId: Awaited<ReturnType<typeof evidence.uploadAudio>> = null;
     try {
       audioStorageId = await evidence.uploadAudio(audio as File);
+      evidence.recordEvent("upload_succeeded", { generationId, elapsedMs: Date.now() - generationStartedAt });
     } catch (error) {
       const text = error instanceof Error ? error.message : "Audio upload failed.";
+      evidence.recordEvent("upload_failed", { generationId, error: text });
       setStatus("failed");
       setMessage(text);
       return;
@@ -226,12 +235,15 @@ export function StorybookApp() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "X-Generation-Id": generationId,
+              "X-Generation-Stage": "transcribe",
               Authorization: `Bearer ${auth.authToken}`
             },
             body: JSON.stringify(requestPayload)
           }
         : {
             method: "POST",
+            headers: { Authorization: `Bearer ${auth.authToken}`, "X-Generation-Id": generationId, "X-Generation-Stage": "transcribe" },
             body: fallbackBody
           });
       const transcriptionResult = (await readGenerateResponse(
@@ -253,6 +265,8 @@ export function StorybookApp() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-Generation-Id": generationId,
+          "X-Generation-Stage": "compose",
           Authorization: `Bearer ${auth.authToken}`
         },
         body: JSON.stringify({
@@ -267,6 +281,7 @@ export function StorybookApp() {
         throw new Error(result.error || "The storybook could not be generated.");
       }
 
+      evidence.recordEvent("preview_ready", { generationId, elapsedMs: Date.now() - generationStartedAt });
       const generatedIntake = result.intake || requestPayload.input;
       setPendingRecommendation({
         intake: generatedIntake,
@@ -274,7 +289,7 @@ export function StorybookApp() {
         audioStorageId,
         model: result.model || "model",
         elapsedMs: (transcriptionResult.elapsedMs || 0) + (result.elapsedMs || 1000),
-        warning: result.warning || ""
+        warning: [transcriptionResult.warning, result.warning].filter(Boolean).join(" ")
       });
       setWarning("");
       setStatus("reviewing");
@@ -286,6 +301,7 @@ export function StorybookApp() {
       );
     } catch (error) {
       const text = error instanceof Error ? error.message : "The storybook could not be generated.";
+      evidence.recordEvent("generation_failed", { generationId, error: text, elapsedMs: Date.now() - generationStartedAt });
       setStatus("failed");
       setMessage(text);
     } finally {
@@ -299,6 +315,7 @@ export function StorybookApp() {
     }
 
     const accepted = pendingRecommendation;
+    evidence.recordEvent("preview_accepted", { generationId: generationIdRef.current });
     const warnings = accepted.warning ? [accepted.warning] : [];
     let runId: string | null = null;
     let publishedPath = "";
@@ -313,6 +330,7 @@ export function StorybookApp() {
 
     try {
       runId = await evidence.createRun({
+        generationId: generationIdRef.current,
         buyerName: accepted.intake.buyerName,
         email: accepted.intake.email,
         elderName: accepted.intake.elderName,
@@ -332,6 +350,7 @@ export function StorybookApp() {
     try {
       const page = await evidence.publishStoryPage(accepted.draft, runId || undefined);
       if (page) {
+        evidence.recordEvent("publish_succeeded", { generationId: generationIdRef.current });
         publishedPath = `/s/${page.slug}`;
         try {
           const response = await fetch("/api/publish-storybook", {
@@ -356,6 +375,7 @@ export function StorybookApp() {
         }
       }
     } catch (error) {
+      evidence.recordEvent("publish_failed", { generationId: generationIdRef.current, error: error instanceof Error ? error.message : "Publishing failed" });
       warnings.push(error instanceof Error ? error.message : "The storybook page could not be published.");
     }
 
@@ -373,6 +393,7 @@ export function StorybookApp() {
   }
 
   function handleCancelRecommendation() {
+    evidence.recordEvent("preview_rejected", { generationId: generationIdRef.current });
     setPendingRecommendation(null);
     setWarning("");
     setStatus(draft.sections.length ? "ready" : "idle");
@@ -407,6 +428,7 @@ export function StorybookApp() {
   }
 
   async function handleExport() {
+    evidence.recordEvent("export_requested", { generationId: generationIdRef.current });
     if (runIdRef.current) {
       await evidence.markExported(runIdRef.current, draft.title || `${intake.elderName}'s Story`);
     }
@@ -506,6 +528,7 @@ export function StorybookApp() {
       ) : (
       <section className="workspace">
         <aside className="intake-panel screen-only" aria-label="Storybook intake">
+          <RazorpayCheckout key={recordingRecoveryKey} disabled={isRecordingBusy || status === "generating" || isPublishing} />
           <div className="panel-heading">
             <div>
               <p className="eyebrow">{activeDraft.sections.length ? "Review" : "Audio intake"}</p>
@@ -517,6 +540,7 @@ export function StorybookApp() {
 
           <div className="upload-zone">
             <AudioIntake
+              onEvent={evidence.recordEvent}
               key={recordingRecoveryKey}
               recoveryKey={recordingRecoveryKey}
               audio={audio}

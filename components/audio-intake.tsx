@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Square, Upload, Download } from "lucide-react";
 import { maxAudioBytes, validateAudioFile } from "@/lib/files";
 
+import type { ProductEventName, ProductEventDetails } from "@/lib/telemetry-events";
+
 const MAX_SECONDS = 600;
 const formats = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"];
 
@@ -37,7 +39,8 @@ function microphoneError(error: unknown) {
   return "Recording could not start. Try again, or upload a recording instead.";
 }
 
-export function AudioIntake({ audio, onChange, disabled, onBusyChange, recoveryKey }: {
+export function AudioIntake({ audio, onChange, disabled, onBusyChange, recoveryKey, onEvent }: {
+  onEvent?: (name: ProductEventName, details?: ProductEventDetails) => void;
   recoveryKey: string;
   audio: File | null;
   onChange: (file: File) => void;
@@ -54,7 +57,7 @@ export function AudioIntake({ audio, onChange, disabled, onBusyChange, recoveryK
   const stream = useRef<MediaStream | null>(null);
   const mounted = useRef(false);
   const busy = useRef(false);
-  const callbacks = useRef({ onChange, onBusyChange });
+  const callbacks = useRef({ onChange, onBusyChange, onEvent });
   const initialAudio = useRef(audio);
   const changed = useRef(false);
   const requestId = useRef(0);
@@ -62,10 +65,11 @@ export function AudioIntake({ audio, onChange, disabled, onBusyChange, recoveryK
     const current = recorder.current;
     if (!current || current.state === "inactive") return;
     if (mounted.current) { setState("stopping"); if (reason) setNotice(reason); }
+    if (reason) callbacks.current.onEvent?.("recording_interrupted", { error: reason });
     current.stop();
   }, []);
   const active = state !== "idle";
-  useEffect(() => { callbacks.current = { onChange, onBusyChange }; }, [onChange, onBusyChange]);
+  useEffect(() => { callbacks.current = { onChange, onBusyChange, onEvent }; }, [onChange, onBusyChange, onEvent]);
 
   useEffect(() => {
     mounted.current = true;
@@ -147,6 +151,7 @@ export function AudioIntake({ audio, onChange, disabled, onBusyChange, recoveryK
         const extension = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
         const file = new File(chunks, `interview-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`, { type });
         if (file.size > 0) {
+          callbacks.current.onEvent?.("recording_saved", { bytes: file.size, contentType: file.type });
           if (mounted.current) callbacks.current.onChange(file);
           void draftStore(recoveryKey, file).catch(() => {
             if (mounted.current) setNotice("Your recording is ready, but this browser could not save a recovery copy. Download it before leaving.");
@@ -159,6 +164,7 @@ export function AudioIntake({ audio, onChange, disabled, onBusyChange, recoveryK
         track.onmute = () => stop("The microphone was interrupted. Listen to the saved recording before continuing.");
       });
       current.start(1000);
+      callbacks.current.onEvent?.("recording_started");
       const started = Date.now();
       setSeconds(0);
       setState("recording");
@@ -173,6 +179,7 @@ export function AudioIntake({ audio, onChange, disabled, onBusyChange, recoveryK
       stream.current?.getTracks().forEach((track) => track.stop());
       stream.current = null;
       recorder.current = null;
+      callbacks.current.onEvent?.("recording_failed", { error: microphoneError(error) });
       if (mounted.current) setNotice(microphoneError(error));
       finishBusy();
     }

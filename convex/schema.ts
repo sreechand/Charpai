@@ -21,7 +21,52 @@ const charpaiDraftDesign = v.object({
 export default defineSchema({
   ...authTables,
 
+  paymentOrders: defineTable({
+    userId: v.id("users"),
+    orderId: v.string(),
+    amount: v.number(),
+    currency: v.string(),
+    status: v.union(v.literal("created"), v.literal("paid")),
+    paymentId: v.optional(v.string()),
+    createdAt: v.number(),
+    paidAt: v.optional(v.number())
+  }).index("by_order_id", ["orderId"])
+    .index("by_user_id_and_status", ["userId", "status"]),
+
+  productEvents: defineTable({
+    userId: v.id("users"), name: v.string(), createdAt: v.number(),
+    generationId: v.optional(v.string()), elapsedMs: v.optional(v.number()),
+    bytes: v.optional(v.number()), contentType: v.optional(v.string()), error: v.optional(v.string())
+  }).index("by_user_id", ["userId"]).index("by_name", ["name"]),
+
+  generationRequests: defineTable({
+    userId: v.id("users"),
+    generationId: v.string(),
+    stage: v.union(v.literal("full"), v.literal("transcribe"), v.literal("compose")),
+    status: v.union(v.literal("started"), v.literal("succeeded"), v.literal("failed")),
+    promptVersion: v.string(),
+    createdAt: v.number(),
+    finishedAt: v.optional(v.number()),
+    elapsedMs: v.optional(v.number()),
+    httpStatus: v.optional(v.number()),
+    error: v.optional(v.string()),
+    warning: v.optional(v.string())
+  }).index("by_user_id", ["userId"]).index("by_generation_id", ["generationId"]),
+
+  generationEvents: defineTable({
+    requestId: v.id("generationRequests"),
+    userId: v.id("users"),
+    name: v.string(),
+    status: v.union(v.literal("succeeded"), v.literal("failed")),
+    model: v.optional(v.string()),
+    providerRequestId: v.optional(v.string()),
+    elapsedMs: v.number(),
+    artifactStorageId: v.id("_storage"),
+    createdAt: v.number()
+  }).index("by_request_id", ["requestId"]).index("by_user_id", ["userId"]),
+
   runs: defineTable({
+    generationId: v.optional(v.string()),
     accessKey: v.optional(v.string()),
     userId: v.optional(v.id("users")),
     buyerName: v.string(),

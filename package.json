@@ -19,17 +19,21 @@
     "lucide-react": "latest",
     "next": "latest",
     "openai": "latest",
+    "razorpay": "^2.9.8",
     "react": "latest",
     "react-dom": "latest",
     "zod": "latest"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "convex-test": "^0.0.60",
     "eslint": "latest",
     "eslint-config-next": "latest",
     "playwright": "^1.62.1",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^5.0.3"
   }
 }

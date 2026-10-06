@@ -11,8 +11,11 @@
 import type * as auth from "../auth.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
+import type * as payments from "../payments.js";
+import type * as razorpay from "../razorpay.js";
 import type * as runs from "../runs.js";
 import type * as storybookPages from "../storybookPages.js";
+import type * as telemetry from "../telemetry.js";
 import type * as waitlist from "../waitlist.js";
 
 import type {
@@ -25,8 +28,11 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   files: typeof files;
   http: typeof http;
+  payments: typeof payments;
+  razorpay: typeof razorpay;
   runs: typeof runs;
   storybookPages: typeof storybookPages;
+  telemetry: typeof telemetry;
   waitlist: typeof waitlist;
 }>;
 

@@ -3,6 +3,9 @@ import { v } from "convex/values";
 
 const app = defineApp({
   env: {
+    RAZORPAY_KEY_ID: v.optional(v.string()),
+    RAZORPAY_KEY_SECRET: v.optional(v.string()),
+    RAZORPAY_AMOUNT_PAISE: v.optional(v.string()),
     SITE_URL: v.optional(v.string()),
     JWT_PRIVATE_KEY: v.optional(v.string()),
     JWKS: v.optional(v.string()),

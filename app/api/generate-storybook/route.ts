@@ -27,19 +27,48 @@ import { maxAudioBytes } from "@/lib/files";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
+import { GenerationTelemetry, instrumentOpenAI, PROMPT_VERSION } from "@/lib/generation-telemetry";
+
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
+  const authToken = readBearerToken(request.headers.get("authorization"));
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl || !authToken) {
+    return NextResponse.json({ error: "Sign in before generating a storybook." }, { status: 401 });
+  }
+  const client = new ConvexHttpClient(convexUrl);
+  client.setAuth(authToken);
+  let telemetry: GenerationTelemetry;
+  try {
+    const stageHeader = readGenerationStage(request.headers.get("x-generation-stage"));
+    const generationId = request.headers.get("x-generation-id") || randomUUID();
+    const requestId = await client.mutation(api.telemetry.start, { generationId, stage: stageHeader, promptVersion: PROMPT_VERSION });
+    telemetry = new GenerationTelemetry(client, requestId);
+  } catch {
+    console.error(JSON.stringify({ event: "telemetry_start_failed", stage: request.headers.get("x-generation-stage") }));
+    return NextResponse.json({ error: "Generation could not start. Check your sign-in and try again." }, { status: 503 });
+  }
+  const response = await generate(request, authToken, telemetry, startedAt);
+  const body = await response.json();
+  await telemetry.finish(response.status, body, Date.now() - startedAt);
+  const telemetryWarning = telemetry.warnings.join(" ");
+  return NextResponse.json({ ...body, generationRequestId: telemetry.requestId,
+    ...(telemetryWarning ? { warning: [body.warning, telemetryWarning].filter(Boolean).join(" ") } : {})
+  }, { status: response.status });
+}
+
+async function generate(request: Request, authToken: string, telemetry: GenerationTelemetry, startedAt: number) {
 
   try {
-    const authToken = readBearerToken(request.headers.get("authorization"));
-    const { stage, input, audio, transcript: suppliedTranscript } = await readRequest(
+    const { stage, input, audio, audioStorageId, transcript: suppliedTranscript } = await readRequest(
       request,
       authToken
     );
 
+    await telemetry.record("request", { stage, input, audio, audioStorageId, transcript: suppliedTranscript, client: { userAgent: request.headers.get("user-agent"), appRelease: process.env.APP_RELEASE || "unversioned" }, sdkMaxRetries: 2 });
     if (!process.env.OPENAI_API_KEY) {
       if (stage === "transcribe") {
         return NextResponse.json({
@@ -59,7 +88,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = instrumentOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }), telemetry);
 
     if (stage === "compose") {
       if (!suppliedTranscript) {
@@ -82,7 +111,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const transcript = await transcribe(openai, audio, input);
+    const transcript = await transcribe(openai, audio, input, telemetry);
     if (stage === "transcribe") {
       return NextResponse.json({
         transcript,
@@ -218,6 +247,7 @@ async function readRequest(
   stage: "full" | "transcribe" | "compose";
   input: IntakePayload;
   audio: File | null;
+  audioStorageId?: Id<"_storage">;
   transcript: string;
 }> {
   const contentType = request.headers.get("content-type") || "";
@@ -232,6 +262,7 @@ async function readRequest(
     return {
       stage: readGenerationStage(payload.stage),
       input: readJsonIntake(payload.input || {}),
+      audioStorageId: payload.audioStorageId,
       audio: payload.audioStorageId ? await readStoredAudio(payload.audioStorageId, authToken) : null,
       transcript: typeof payload.transcript === "string" ? payload.transcript.trim() : ""
     };
@@ -292,8 +323,8 @@ async function readStoredAudio(storageId: Id<"_storage">, authToken: string | nu
   });
 }
 
-async function transcribe(openai: OpenAI, audio: File, input: IntakePayload) {
-  const audioSegments = await prepareAudioForTranscription(audio);
+async function transcribe(openai: OpenAI, audio: File, input: IntakePayload, telemetry: GenerationTelemetry) {
+  const audioSegments = await telemetry.trace("audio_preparation", { audio }, () => prepareAudioForTranscription(audio));
   const transcripts = await Promise.all(
     audioSegments.map(async (segment, index) => {
       try {

@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   type ReactNode
 } from "react";
@@ -19,7 +20,10 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { StorybookDraft } from "@/lib/storybook";
 
+import type { ProductEventName, ProductEventDetails } from "@/lib/telemetry-events";
+
 type CreateRunInput = {
+  generationId?: string;
   buyerName?: string;
   email?: string;
   elderName: string;
@@ -41,7 +45,9 @@ export type StorybookPageSummary = {
 };
 
 type EvidenceContextValue = {
+  paymentAvailable: boolean | undefined;
   backend: "convex" | "local";
+  recordEvent: (name: ProductEventName, details?: ProductEventDetails) => void;
   storyPages: StorybookPageSummary[] | undefined;
   uploadAudio: (file: File) => Promise<Id<"_storage"> | null>;
   createRun: (input: CreateRunInput) => Promise<string>;
@@ -140,6 +146,24 @@ function ConvexAuthBridge({ children }: { children: ReactNode }) {
 }
 
 function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useConvexAuth();
+  const paymentStatus = useQuery(api.payments.status, isAuthenticated ? {} : "skip");
+  const productEvent = useMutation(api.telemetry.productEvent);
+  const recordEvent = useCallback((name: ProductEventName, details: ProductEventDetails = {}) => {
+    if (!isAuthenticated) return;
+    void productEvent({ name, ...details }).catch(() => {
+      console.error("Product diagnostic event could not be saved:", name);
+    });
+  }, [isAuthenticated, productEvent]);
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => recordEvent("browser_error", { error: event.message });
+    const onRejection = (event: PromiseRejectionEvent) => recordEvent("browser_error", {
+      error: event.reason instanceof Error ? event.reason.message : "Unhandled browser promise rejection"
+    });
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => { window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection); };
+  }, [recordEvent]);
   const storyPages = useQuery(api.storybookPages.listMine);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const recordAudioUpload = useMutation(api.files.recordAudioUpload);
@@ -154,6 +178,8 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<EvidenceContextValue>(
     () => ({
       backend: "convex",
+      paymentAvailable: paymentStatus?.available,
+      recordEvent,
       storyPages,
       uploadAudio: async (file) => {
         const uploadUrl = await generateUploadUrl();
@@ -213,6 +239,7 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
     }),
     [
       create,
+      paymentStatus?.available,
       deletePublishedPage,
       exported,
       failed,
@@ -221,6 +248,7 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
       publish,
       ready,
       recordAudioUpload,
+      recordEvent,
       storyPages
     ]
   );
@@ -272,6 +300,8 @@ function LocalEvidenceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<EvidenceContextValue>(
     () => ({
       backend: "local",
+      paymentAvailable: false,
+      recordEvent: () => undefined,
       storyPages: [],
       uploadAudio: async () => null,
       createRun: async (input) => {

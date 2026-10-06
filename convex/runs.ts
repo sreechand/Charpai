@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 
 export const createRun = mutation({
   args: {
+    generationId: v.optional(v.string()),
     buyerName: v.optional(v.string()),
     email: v.optional(v.string()),
     elderName: v.string(),
@@ -20,13 +21,17 @@ export const createRun = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuthUserId(ctx);
     const user = await ctx.db.get(userId);
+    const payment = await ctx.db.query("paymentOrders")
+      .withIndex("by_user_id_and_status", q => q.eq("userId", userId).eq("status", "paid"))
+      .order("desc").first();
     const now = Date.now();
     return await ctx.db.insert("runs", {
       ...args,
       userId,
       buyerName: args.buyerName || user?.name || "",
       email: args.email || user?.email || "",
-      paymentStatus: "received",
+      paymentStatus: payment ? "received" : "pending",
+      ...(payment?.paymentId ? { paymentReference: payment.paymentId } : {}),
       status: "created",
       createdAt: now,
       updatedAt: now
