@@ -34,6 +34,7 @@ type Env = {
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
   readonly JWKS: string | undefined;
   readonly JWT_PRIVATE_KEY: string | undefined;
+  readonly PAYMENT_BACKEND_TOKEN: string | undefined;
   readonly RAZORPAY_AMOUNT_PAISE: string | undefined;
   readonly RAZORPAY_KEY_ID: string | undefined;
   readonly RAZORPAY_KEY_SECRET: string | undefined;

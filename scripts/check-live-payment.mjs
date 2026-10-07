@@ -20,14 +20,14 @@ assert.equal((await fetch(`${base}/api/verify-payment`, { method: 'POST', header
 const createdResponse = await fetch(`${base}/api/create-order`, { method: 'POST', headers, body: JSON.stringify({ amount: 1 }) });
 const order = await createdResponse.json();
 assert.equal(createdResponse.status, 200, JSON.stringify(order));
-assert.equal(order.amount, 100, 'Backend ignores browser-supplied amount');
+assert.equal(order.amount, 50000, 'Backend ignores browser-supplied amount');
 assert.equal(order.currency, 'INR');
 assert.match(order.order_id, /^order_/);
 assert.equal('key_secret' in order, false);
 assert.match(order.key_id, /^rzp_test_/);
 const rejected = await fetch(`${base}/api/verify-payment`, { method: 'POST', headers, body: JSON.stringify({ razorpay_order_id: order.order_id, razorpay_payment_id: 'pay_fake', razorpay_signature: '0'.repeat(64) }) });
 assert.equal(rejected.status, 400);
-assert.deepEqual(await client.query(api.payments.status, {}), { available: false });
+assert.deepEqual(await client.query(api.payments.status, {}), { available: false, resumeId: null, response: null });
 let browser;
 try {
   browser = await chromium.launch();
@@ -38,7 +38,7 @@ try {
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByRole('button', { name: 'Pay ₹1.00', exact: true }).click();
+  await page.getByRole('button', { name: 'Pay ₹500.00', exact: true }).click();
   await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(frame => /razorpay/.test(frame.src)), { timeout: 30000 });
   await page.locator('iframe').filter({ visible: true }).first().waitFor({ timeout: 30000 });
   const checkoutFrame = page.frames().find(frame => /razorpay/.test(frame.url()));

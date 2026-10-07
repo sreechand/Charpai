@@ -1599,3 +1599,8 @@ textarea {
 .recording-preview > span { overflow-wrap: anywhere; font: 12px/1.5 var(--font-ui); }
 .recording-preview audio { width: 100%; min-width: 0; }
 .recording-preview a { justify-self: start; text-decoration: none; }
+
+.purchase-onboarding { max-width: 680px; margin: 32px auto; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.purchase-onboarding h2 { font-size: clamp(30px, 5vw, 42px); line-height: 1.15; }
+.purchase-onboarding > p { line-height: 1.6; }
+.purchase-onboarding .payment-panel { margin: 24px 0; }

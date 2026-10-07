@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import ffmpegStatic from "ffmpeg-static";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -41,32 +41,47 @@ export async function POST(request: Request) {
   }
   const client = new ConvexHttpClient(convexUrl);
   client.setAuth(authToken);
-  let telemetry: GenerationTelemetry;
+  const backendToken = process.env.PAYMENT_BACKEND_TOKEN;
+  if (!backendToken) return NextResponse.json({ error: "Storybook checkout is not configured." }, { status: 503 });
+  const generationId = request.headers.get("x-generation-id");
+  if (!generationId) return NextResponse.json({ error: "A storybook identifier is required." }, { status: 400 });
+  let parsed: Awaited<ReturnType<typeof readRequest>>;
+  try { parsed = await readRequest(request, authToken); }
+  catch { return NextResponse.json({ error: "The recording could not be read. Check your sign-in and upload." }, { status: 400 }); }
+  const payloadHash = createHash("sha256").update(parsed.stage === "compose"
+    ? JSON.stringify({ input: parsed.input, transcript: parsed.transcript })
+    : parsed.audio ? Buffer.from(await parsed.audio.arrayBuffer()) : "missing-audio").digest("hex");
+  const token = randomUUID();
   try {
-    const stageHeader = readGenerationStage(request.headers.get("x-generation-stage"));
-    const generationId = request.headers.get("x-generation-id") || randomUUID();
-    const requestId = await client.mutation(api.telemetry.start, { generationId, stage: stageHeader, promptVersion: PROMPT_VERSION });
-    telemetry = new GenerationTelemetry(client, requestId);
-  } catch {
-    console.error(JSON.stringify({ event: "telemetry_start_failed", stage: request.headers.get("x-generation-stage") }));
-    return NextResponse.json({ error: "Generation could not start. Check your sign-in and try again." }, { status: 503 });
+    const grant = await client.mutation(api.payments.beginGeneration, { backendToken, generationId, stage: parsed.stage, payloadHash, token, inputJson: JSON.stringify(parsed.input) });
+    if (grant.response) return NextResponse.json(JSON.parse(grant.response));
+  } catch (error) {
+    const data = error && typeof error === "object" && "data" in error ? error.data as { status?: number; message?: string } : null;
+    return NextResponse.json({ error: data?.message || "This storybook cannot start. Check your payment and try again." }, { status: data?.status || 403 });
   }
-  const response = await generate(request, authToken, telemetry, startedAt);
-  const body = await response.json();
-  await telemetry.finish(response.status, body, Date.now() - startedAt);
-  const telemetryWarning = telemetry.warnings.join(" ");
-  return NextResponse.json({ ...body, generationRequestId: telemetry.requestId,
-    ...(telemetryWarning ? { warning: [body.warning, telemetryWarning].filter(Boolean).join(" ") } : {})
-  }, { status: response.status });
+  let response: NextResponse;
+  try {
+    const requestId = await client.mutation(api.telemetry.start, { generationId, stage: parsed.stage, promptVersion: PROMPT_VERSION });
+    const telemetry = new GenerationTelemetry(client, requestId);
+    response = await generate(parsed, request, authToken, telemetry, startedAt);
+    const body = await response.json();
+    await telemetry.finish(response.status, body, Date.now() - startedAt);
+    const telemetryWarning = telemetry.warnings.join(" ");
+    const result = { ...body, generationRequestId: telemetry.requestId, audioStorageId: parsed.audioStorageId || null,
+      ...(telemetryWarning ? { warning: [body.warning, telemetryWarning].filter(Boolean).join(" ") } : {}) };
+    await client.mutation(api.payments.finishGeneration, { backendToken, generationId, token,
+      ...(response.ok ? { response: JSON.stringify(result) } : {}) });
+    return NextResponse.json(result, { status: response.status });
+  } catch {
+    try { await client.mutation(api.payments.finishGeneration, { backendToken, generationId, token }); } catch { /* A timed-out attempt can be resumed after its lock expires. */ }
+    return NextResponse.json({ error: "Your storybook could not be saved. Retry this story; your payment remains assigned to it." }, { status: 503 });
+  }
 }
 
-async function generate(request: Request, authToken: string, telemetry: GenerationTelemetry, startedAt: number) {
+async function generate(parsed: Awaited<ReturnType<typeof readRequest>>, request: Request, authToken: string, telemetry: GenerationTelemetry, startedAt: number) {
 
   try {
-    const { stage, input, audio, audioStorageId, transcript: suppliedTranscript } = await readRequest(
-      request,
-      authToken
-    );
+    const { stage, input, audio, audioStorageId, transcript: suppliedTranscript } = parsed;
 
     await telemetry.record("request", { stage, input, audio, audioStorageId, transcript: suppliedTranscript, client: { userAgent: request.headers.get("user-agent"), appRelease: process.env.APP_RELEASE || "unversioned" }, sdkMaxRetries: 2 });
     if (!process.env.OPENAI_API_KEY) {

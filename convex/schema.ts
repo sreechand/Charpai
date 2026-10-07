@@ -29,9 +29,20 @@ export default defineSchema({
     status: v.union(v.literal("created"), v.literal("paid")),
     paymentId: v.optional(v.string()),
     createdAt: v.number(),
-    paidAt: v.optional(v.number())
+    paidAt: v.optional(v.number()),
+    generationId: v.optional(v.string()),
+    inputJson: v.optional(v.string()),
+    runId: v.optional(v.id("runs")),
+    mode: v.optional(v.union(v.literal("full"), v.literal("split"))),
+    transcribeHash: v.optional(v.string()),
+    composeHash: v.optional(v.string()),
+    transcribeResponse: v.optional(v.string()),
+    composeResponse: v.optional(v.string()),
+    lock: v.optional(v.object({ token: v.string(), stage: v.string(), startedAt: v.number() }))
   }).index("by_order_id", ["orderId"])
-    .index("by_user_id_and_status", ["userId", "status"]),
+    .index("by_user_id_and_status", ["userId", "status"])
+    .index("by_available", ["userId", "status", "generationId"])
+    .index("by_generation", ["userId", "generationId"]),
 
   productEvents: defineTable({
     userId: v.id("users"), name: v.string(), createdAt: v.number(),
@@ -139,6 +150,7 @@ export default defineSchema({
     updatedAt: v.number(),
     deletedAt: v.optional(v.number())
   })
+    .index("by_run", ["runId"])
     .index("by_slug", ["slug"])
     .index("by_owner_id_and_status", ["ownerId", "status"]),
 

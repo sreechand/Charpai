@@ -119,9 +119,10 @@ export const publish = mutation({
   returns: publicStorybookPage,
   handler: async (ctx, args) => {
     const ownerId = await requireAuthUserId(ctx);
-    if (args.runId) {
-      await requireOwnedRun(ctx, args.runId, ownerId);
-    }
+    if (!args.runId) throw new Error("A paid storybook is required to publish.");
+    await requireOwnedRun(ctx, args.runId, ownerId);
+    const existing = await ctx.db.query("storybookPages").withIndex("by_run", q => q.eq("runId", args.runId)).unique();
+    if (existing) return await toPublicPage(ctx, existing);
     if (args.draft.illustrationStorageId) {
       await requireOwnedStorybookImage(ctx, args.draft.illustrationStorageId, ownerId);
     }

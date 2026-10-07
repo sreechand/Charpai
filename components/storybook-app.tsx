@@ -124,6 +124,7 @@ export function StorybookApp() {
   const [pendingRecommendation, setPendingRecommendation] = useState<PendingRecommendation | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "reviewing" | "ready" | "failed">("idle");
   const generationIdRef = useRef<string | undefined>(undefined);
+  const [activeBookId, setActiveBookId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
@@ -167,6 +168,23 @@ export function StorybookApp() {
     } catch { return "signed-out"; }
   }, [auth.authToken]);
 
+  function resumeStorybook() {
+    if (!evidence.paymentResumeId) return;
+    generationIdRef.current = evidence.paymentResumeId;
+    setActiveBookId(evidence.paymentResumeId);
+    if (evidence.paymentResponse) {
+      try {
+        const saved = JSON.parse(evidence.paymentResponse) as GenerateResponse & { audioStorageId?: Id<"_storage"> };
+        if (saved.intake) setIntake(saved.intake);
+        if (saved.draft) {
+          setPendingRecommendation({ intake: saved.intake || initialIntake, draft: saved.draft,
+            audioStorageId: saved.audioStorageId || null, model: saved.model || "model", elapsedMs: saved.elapsedMs || 0, warning: saved.warning || "" });
+          setStatus("reviewing");
+        }
+      } catch { setMessage("Your draft could not be loaded. Please refresh."); }
+    }
+  }
+
   const canGenerate =
     Boolean(audio) &&
     !isRecordingBusy &&
@@ -198,8 +216,9 @@ export function StorybookApp() {
     setGenerationStageId("uploading");
     setStatus("generating");
 
-    const generationId = crypto.randomUUID();
+    const generationId = status === "failed" || evidence.paymentResumeId ? (generationIdRef.current || evidence.paymentResumeId || crypto.randomUUID()) : crypto.randomUUID();
     generationIdRef.current = generationId;
+    setActiveBookId(generationId);
     const generationStartedAt = Date.now();
     evidence.recordEvent("generation_started", { generationId });
     evidence.recordEvent("upload_started", { generationId, bytes: audio?.size, contentType: audio?.type });
@@ -524,10 +543,23 @@ export function StorybookApp() {
 
       {auth.status !== "authenticated" ? (
         <AuthGate auth={auth} />
+      ) : evidence.paymentAvailable === undefined ? (
+        <p role="status">Checking your storybook access…</p>
+      ) : !activeBookId && (!evidence.paymentAvailable || Boolean(evidence.paymentResumeId)) ? (
+        <section className="purchase-onboarding" aria-label="Unlock your first storybook">
+          <p className="eyebrow">Your family story starts here</p>
+          <h2>{evidence.paymentResumeId ? "Your storybook is waiting for you." : "One payment. One storybook to keep."}</h2>
+          <p>{evidence.paymentResumeId ? "You’ve already paid for this storybook. Pick up where you left off." : "Unlock one storybook before you record or upload your interview. You can read and revisit that book afterwards. Each additional storybook needs a new payment."}</p>
+          {evidence.paymentResumeId ? <>
+            <button className="primary-button" type="button" onClick={resumeStorybook}>Continue your storybook</button>
+          </> : <RazorpayCheckout key={recordingRecoveryKey} />}
+          <ProfileStoriesPanel deletingPageId={deletingPageId} onDelete={(pageId) => void handleDeleteStoryPage(pageId)} pages={evidence.storyPages} />
+        </section>
       ) : (
       <section className="workspace">
         <aside className="intake-panel screen-only" aria-label="Storybook intake">
-          <RazorpayCheckout key={recordingRecoveryKey} disabled={isRecordingBusy || status === "generating" || isPublishing} />
+          <p className="notice">Your payment unlocks this storybook. Failed attempts can be retried without paying again.</p>
+          {draft.sections.length && !hasPendingRecommendation ? <button className="session-button" type="button" onClick={() => window.location.reload()}>Start another storybook</button> : null}
           <div className="panel-heading">
             <div>
               <p className="eyebrow">{activeDraft.sections.length ? "Review" : "Audio intake"}</p>

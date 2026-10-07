@@ -46,6 +46,8 @@ export type StorybookPageSummary = {
 
 type EvidenceContextValue = {
   paymentAvailable: boolean | undefined;
+  paymentResumeId: string | null | undefined;
+  paymentResponse: string | null | undefined;
   backend: "convex" | "local";
   recordEvent: (name: ProductEventName, details?: ProductEventDetails) => void;
   storyPages: StorybookPageSummary[] | undefined;
@@ -179,6 +181,8 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
     () => ({
       backend: "convex",
       paymentAvailable: paymentStatus?.available,
+      paymentResumeId: paymentStatus?.resumeId,
+      paymentResponse: paymentStatus?.response,
       recordEvent,
       storyPages,
       uploadAudio: async (file) => {
@@ -240,6 +244,8 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
     [
       create,
       paymentStatus?.available,
+      paymentStatus?.resumeId,
+      paymentStatus?.response,
       deletePublishedPage,
       exported,
       failed,
@@ -301,6 +307,8 @@ function LocalEvidenceProvider({ children }: { children: ReactNode }) {
     () => ({
       backend: "local",
       paymentAvailable: false,
+      paymentResumeId: null,
+      paymentResponse: null,
       recordEvent: () => undefined,
       storyPages: [],
       uploadAudio: async () => null,

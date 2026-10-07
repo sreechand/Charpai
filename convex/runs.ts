@@ -21,11 +21,13 @@ export const createRun = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuthUserId(ctx);
     const user = await ctx.db.get(userId);
+    if (!args.generationId) throw new Error("A paid storybook is required.");
     const payment = await ctx.db.query("paymentOrders")
-      .withIndex("by_user_id_and_status", q => q.eq("userId", userId).eq("status", "paid"))
-      .order("desc").first();
+      .withIndex("by_generation", q => q.eq("userId", userId).eq("generationId", args.generationId)).unique();
+    if (!payment || payment.status !== "paid" || !payment.composeResponse) throw new Error("Finish your paid storybook before saving it.");
+    if (payment.runId) return payment.runId;
     const now = Date.now();
-    return await ctx.db.insert("runs", {
+    const runId = await ctx.db.insert("runs", {
       ...args,
       userId,
       buyerName: args.buyerName || user?.name || "",
@@ -36,6 +38,8 @@ export const createRun = mutation({
       createdAt: now,
       updatedAt: now
     });
+    await ctx.db.patch(payment._id, { runId });
+    return runId;
   }
 });
 

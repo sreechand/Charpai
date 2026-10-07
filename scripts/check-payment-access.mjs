@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { ConvexHttpClient } from 'convex/browser';
+import { api } from '../convex/_generated/api.js';
+
+const local = await readFile('.env.local', 'utf8');
+const url = local.split('\n').find(line => line.startsWith('NEXT_PUBLIC_CONVEX_URL=')).slice('NEXT_PUBLIC_CONVEX_URL='.length).trim();
+assert.equal(url, 'https://qualified-bullfrog-386.convex.cloud', 'Development only');
+const client = new ConvexHttpClient(url);
+const signedIn = await client.action(api.auth.signIn, { provider: 'password', params: { flow: 'signUp', email: `paid-access-${randomUUID()}@example.invalid`, password: randomUUID() + randomUUID() } });
+assert.ok(signedIn.tokens?.token);
+client.setAuth(signedIn.tokens.token);
+const base = 'http://localhost:3000';
+const headers = { Authorization: `Bearer ${signedIn.tokens.token}`, 'Content-Type': 'application/json' };
+const blocked = await fetch(`${base}/api/generate-storybook`, { method: 'POST', headers: { ...headers, 'X-Generation-Id': randomUUID() }, body: JSON.stringify({ stage: 'transcribe', input: {} }) });
+assert.equal(blocked.status, 402, await blocked.text());
+await assert.rejects(client.mutation(api.files.generateUploadUrl, {}), /Pay/);
+const created = await fetch(`${base}/api/create-order`, { method: 'POST', headers, body: JSON.stringify({ amount: 1 }) });
+if (created.status !== 200) throw new Error(await created.text());
+const order = await created.json();
+assert.equal(order.amount, 50000);
+assert.match(order.key_id, /^rzp_test_/);
+assert.equal('key_secret' in order, false);
+const bad = await fetch(`${base}/api/verify-payment`, { method: 'POST', headers, body: JSON.stringify({ razorpay_order_id: order.order_id, razorpay_payment_id: 'pay_fake', razorpay_signature: '0'.repeat(64) }) });
+assert.equal(bad.status, 400);
+assert.equal((await client.query(api.payments.status, {})).available, false);
+console.log('PASS: unpaid generation and uploads blocked; real ₹500 test order created; bad signature rejected; no access granted.');

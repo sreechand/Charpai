@@ -1,5 +1,13 @@
 # Project action items
 
+## GitHub checkpoint — 2026-10-07
+
+- User requested committing and pushing all current changes to GitHub `sreechand/agara`, branch `main`.
+- Includes payment-first onboarding, one payment per storybook, returning-user paid access and draft resumption, backend payment access checks, updated verification scripts/tests, and Razorpay transaction evidence.
+- Verified before committing: all six automated tests, TypeScript checks, lint, production build, and whitespace checks pass. Configured secret values are absent from changed files; `.env` and `.env.local` remain ignored.
+- Browser and Razorpay dashboard confirmed the ₹500 test card payment is captured. Pushing to GitHub does not deploy the app.
+- Next: retry Razorpay's onboarding test-transaction check; production release remains a separate task.
+
 ## Laundry list
 
 Recovered from the earlier conversation on 2026-10-06. The original list contains eight items. Completion status has not been checked against the current app.
