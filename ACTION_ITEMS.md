@@ -1,5 +1,27 @@
 # Project action items
 
+## Paid upload journey passed — 2026-10-07
+
+- Verified real upload → transcription → story and image generation → edit → save → sign out/in → full reload → reopen the same saved book, using fictional test audio and the previously paid development account.
+- Edited title and dedication persisted; reopening required no new payment. Removed automatic external hosting from Confirm changes; the flow now saves with Convex.
+- TypeScript and lint pass. Remaining checks before release: live microphone capture, PDF export, and whether edits after confirming persist. These were not verified by the upload journey.
+
+## Recommended next check — 2026-10-07
+
+After Razorpay confirmed the test integration, the user asked what comes next. Recommended verifying the complete paid-user journey: use a paid development account, record/upload, generate and edit a storybook, save/publish it, then sign out/in and confirm the same book remains accessible without another payment. Payment checkout is verified; this full journey has not been verified in this session. Production release follows after resolving any failures and obtaining explicit production approval. The next original feature priority remains live interview guidance.
+
+## Razorpay test integration confirmed — 2026-10-07
+
+- Synced the wizard's current test keys to development only, with user approval; secrets remain ignored.
+- Fresh ₹500 test card payment `pay_Tkz2xS8n3qP1f2` completed through Charpai checkout and unlocked the recording workspace.
+- Retried the wizard until step 4 explicitly confirmed Transaction successful and successful website integration. Earlier “no transaction” reports are historical; live payment setup remains unfinished.
+- Next: review the first-use flow after payment, then prepare a separately approved production release.
+
+## Razorpay onboarding retry — 2026-10-07
+
+- Retried the wizard's completed-test-transaction check; it still reports none, despite the captured card payment verified in the dashboard.
+- Reopening the wizard automatically generated a different test key. Next: align the development app with that key securely, complete a fresh checkout, then retry the wizard. Key-specific filtering remains a hypothesis; no production changes were made.
+
 ## Current status — 2026-10-07
 
 The recovered original list has eight items, with automatic payment verification and Razorpay integration overlapping.

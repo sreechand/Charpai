@@ -337,7 +337,6 @@ export function StorybookApp() {
     const warnings = accepted.warning ? [accepted.warning] : [];
     let runId: string | null = null;
     let publishedPath = "";
-    let hereNowUrl = "";
 
     setIsPublishing(true);
     setMessage("");
@@ -370,27 +369,6 @@ export function StorybookApp() {
       if (page) {
         evidence.recordEvent("publish_succeeded", { generationId: generationIdRef.current });
         publishedPath = `/s/${page.slug}`;
-        try {
-          const response = await fetch("/api/publish-storybook", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${auth.authToken}`
-            },
-            body: JSON.stringify({ slug: page.slug })
-          });
-          const result = (await response.json()) as { url?: string; error?: string };
-          if (!response.ok || !result.url) {
-            throw new Error(result.error || "here.now could not publish the storybook.");
-          }
-          hereNowUrl = result.url;
-        } catch (error) {
-          warnings.push(
-            error instanceof Error
-              ? `The Charpai page was saved, but here.now failed: ${error.message}`
-              : "The Charpai page was saved, but here.now could not publish it."
-          );
-        }
       }
     } catch (error) {
       evidence.recordEvent("publish_failed", { generationId: generationIdRef.current, error: error instanceof Error ? error.message : "Publishing failed" });
@@ -402,9 +380,7 @@ export function StorybookApp() {
     setStatus("ready");
     setWarning(warnings.join(" "));
     setMessage(
-      hereNowUrl
-        ? `Recommendations applied. Storybook published at ${hereNowUrl}.`
-        : publishedPath
+      publishedPath
         ? `Recommendations applied. Unlisted page published at ${publishedPath}.`
         : "Recommendations applied."
     );
@@ -556,9 +532,8 @@ export function StorybookApp() {
           <ProfileStoriesPanel deletingPageId={deletingPageId} onDelete={(pageId) => void handleDeleteStoryPage(pageId)} pages={evidence.storyPages} />
         </section>
       ) : (
-      <section className="workspace">
+      <section className={`workspace${activeDraft.sections.length ? "" : " workspace-empty"}`}>
         <aside className="intake-panel screen-only" aria-label="Storybook intake">
-          <p className="notice">Your payment unlocks this storybook. Failed attempts can be retried without paying again.</p>
           {draft.sections.length && !hasPendingRecommendation ? <button className="session-button" type="button" onClick={() => window.location.reload()}>Start another storybook</button> : null}
           <div className="panel-heading">
             <div>
@@ -592,6 +567,8 @@ export function StorybookApp() {
             </label>
           </div>
 
+          {activeDraft.sections.length ? (
+          <>
           <div className="field-section-heading">
             <p className="eyebrow">
               {hasPendingRecommendation
@@ -636,6 +613,9 @@ export function StorybookApp() {
               onChange={(value) => updateIntake("languageMix", value)}
             />
           </div>
+
+          </>
+          ) : null}
 
           <div className="action-row">
             <button className="secondary-button" type="button" onClick={loadDemo}>
@@ -1364,6 +1344,8 @@ function AutoSizeTextArea({
   }, [value]);
 
   return (
+    <>
+    <div className={`print-text ${className || ""}`} aria-hidden="true">{value}</div>
     <textarea
       aria-label={ariaLabel}
       className={className}
@@ -1372,6 +1354,7 @@ function AutoSizeTextArea({
       rows={rows}
       value={value}
     />
+    </>
   );
 }
 

@@ -1,5 +1,27 @@
 # Onboarding
 
+## Full paid upload journey verified — 2026-10-07
+
+Used the development account that completed test payment `pay_Tkz2xS8n3qP1f2`. Uploaded a 37-second synthetic spoken interview with fictional family memories through Chrome's native file picker. Real transcription, composition, and image generation completed; the app presented a reviewable draft. Corrected the name/relationship fields and edited the title and dedication before Confirm changes. Convex saved the book and the library showed one story.
+
+Signed out and back into the same account, then fully reloaded to discard in-memory state. The library still contained the saved book; its Open link displayed the edited title and dedication, the generated image, and all three sections without another payment. Saved page: `/s/meera-s-courtyard-journey-test-2l506j633s0n4o47`. A payment offer on the account screen is for another book; it did not block reopening this one.
+
+Removed the old automatic call to the external publishing service from Confirm changes, so this user flow saves in Convex and opens the existing Charpai story URL as required by the fixed stack. The older external-publishing endpoint remains in the repository but is no longer called by this flow. TypeScript and lint pass. Live microphone capture, PDF export, edits made after confirming, and production were not tested in this run. Next: verify microphone capture and PDF export before release.
+
+Final verification: production build and whitespace checks also pass. This session's code fix and notes are local changes, not yet committed or deployed to production.
+
+## Recording controls review — 2026-10-07
+
+The user approved hiding the empty details fields. The details heading and name, relationship, place, and language inputs now appear only when a storybook draft has sections, including generated, resumed, or demo drafts.
+
+Checked Record here and Upload audio in Chrome; switching works and the upload option displays accepted formats and a 100 MB limit. No microphone recording or file upload was performed in this review. The empty details fields, optional photos, Load demo, and empty library still appear before recording. Recommended next simplification: hide the automatically extracted details until processing completes. This recommendation has not been implemented.
+
+## Desktop preview — 2026-10-07
+
+The user also requested removing the workspace message about payment unlocking the book and free retries. Removed that notice; payment access and retry behavior remain in place.
+
+During the joint post-payment review, the user requested hiding the empty storybook preview on desktop until a draft is generated. The desktop workspace now centers the recording/upload panel while there are no story sections, then restores the two-column editor layout when a generated or resumed draft is available. Mobile layout is unchanged.
+
 ## Returning paid users — 2026-10-07
 
 The user confirmed that payment must persist across logins even if no storybook has been generated. Payment is attached to the account, not the browser session. An unused paid credit opens the workspace without checkout; an unfinished paid book shows Continue your storybook and explicitly says it is already paid. Added a test that signs in with distinct sessions for the same account before and during creation, confirming no additional order is created.

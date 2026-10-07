@@ -274,6 +274,17 @@ textarea {
   box-shadow: var(--shadow);
 }
 
+@media (min-width: 981px) {
+  .workspace-empty {
+    grid-template-columns: minmax(340px, 420px);
+    justify-content: center;
+  }
+
+  .workspace-empty .book-workbench {
+    display: none;
+  }
+}
+
 .intake-panel {
   display: grid;
   gap: 14px;
@@ -1521,6 +1532,8 @@ textarea {
   }
 }
 
+.print-text { display: none; }
+
 @media print {
   @page {
     margin: 10mm;
@@ -1555,6 +1568,8 @@ textarea {
   }
 
   .book {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     width: 100%;
     min-height: 0;
     border: 0;
@@ -1563,8 +1578,19 @@ textarea {
 
   .visual-page,
   .text-page {
+    min-height: 0;
     padding: 16px;
   }
+
+  .book textarea { display: none; }
+  .book .print-text { display: block; min-height: 0; white-space: pre-wrap; }
+  .book-title { font-size: 26px; }
+  .book-subtitle { font-size: 16px; }
+  .book-cover { gap: 8px; padding-bottom: 14px; }
+  .story-section { padding: 12px 0; }
+  .story-section-heading { font-size: 20px; }
+  .story-section-body, .book-dedication, .closing-note .print-text { font-size: 14px; line-height: 1.45; }
+  .closing-note { padding-top: 12px; }
 
   input,
   textarea {

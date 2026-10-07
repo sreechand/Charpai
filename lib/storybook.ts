@@ -320,7 +320,7 @@ Return only valid JSON with this exact shape:
   ],
   "closingNote": "one first-person closing paragraph using only what the interviewee said",
   "illustrationBrief": "one sentence visual direction for a small rubber-stamp field-note impression, no private data beyond names/places supplied",
-  "stampSubject": "the most distinctive place, object, food, room, landscape, or memory fragment to illustrate",
+  "stampSubject": "a short caption naming exactly one key thing shown in the illustration, such as Jasmine or Coffee tumbler",
   "stampMotifs": ["3 to 6 essential visual forms only, no labels, no people, no clutter"],
   "photoCaptions": ["caption 1", "caption 2", "caption 3"],
   "designSystem": {
@@ -351,6 +351,7 @@ Rules:
 - Preserve Indian family relationship terms and proper nouns.
 - Avoid melodrama. Make it feel like a family keepsake, not an obituary.
 - For stampSubject and stampMotifs, identify the minimum visual information needed for recognition: one landmark, object silhouette, food form, room arrangement, landscape contour, or family object. Do not make a catalogue.
+- stampSubject is the reader-facing caption under the illustration. Name exactly one visible subject in a short noun phrase. Do not describe the style, materials, rubber stamp, field note, impression, or other objects. Keep detailed visual direction in illustrationBrief only.
 - Exclude people, crowds, vehicles, dense buildings, decorative clutter, slogans, captions, dates, labels and watermarks from the illustration concept.
 - For designSystem, choose only colors from the Charpai palette unless the transcript provides a specific color that is essential evidence.
 - designSystem.memoryWorldLabel must be specific to the transcript, not a generic phrase such as "family memories".

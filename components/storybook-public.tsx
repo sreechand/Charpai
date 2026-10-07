@@ -57,8 +57,8 @@ export function StorybookPublic({ story }: { story: PublicStorybook }) {
             )}
           </section>
 
-          {story.illustrationBrief ? (
-            <p className="public-illustration-brief">{story.illustrationBrief}</p>
+          {story.stampSubject ? (
+            <p className="public-illustration-brief">{story.stampSubject}</p>
           ) : null}
 
         </section>
