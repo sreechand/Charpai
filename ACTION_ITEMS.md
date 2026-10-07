@@ -1,5 +1,27 @@
 # Project action items
 
+## Current status — 2026-10-07
+
+The recovered original list has eight items, with automatic payment verification and Razorpay integration overlapping.
+
+Remaining feature work:
+
+1. Live interview guidance: suggest questions based on what the storyteller is saying. Highest original priority; current prompts are static.
+2. Improve the generated storybook's design and format.
+3. Add recording playback alongside the saved/shared storybook. Recording preview already exists before generation.
+4. Add QR code access to shared storybooks.
+
+Implemented locally/development:
+
+- Razorpay checkout and automatic captured-payment verification.
+- One payment unlocks one book and ongoing access; unused payment and unfinished books persist across logins.
+- Landing page, mobile layout revision, and Google-branded sign-in button.
+- Generation usage and error tracking; broader product tracking/reporting can be assessed separately.
+
+Next release work: commit the pending paid-onboarding changes, review the first-use flow after payment, reconcile landing-page claims with shipped features, and prepare production payment configuration for an explicitly approved release. Production remains unchanged. Six payment tests pass; simulated Razorpay checkout was completed successfully in Chrome.
+
+Conversation summary: the user asked for the remaining action items. Checked the saved laundry list, onboarding/landing notes, and feature references in the code; separated remaining feature work from development implementations and release tasks.
+
 ## GitHub checkpoint — 2026-10-07
 
 - User requested committing and pushing all current changes to GitHub `sreechand/agara`, branch `main`.
