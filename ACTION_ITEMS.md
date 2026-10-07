@@ -1,5 +1,12 @@
 # Project action items
 
+## Microphone and PDF checks completed — 2026-10-07
+
+- Local microphone capture, playback, download, and recovery passed; downloaded audio decoded successfully.
+- Fixed sample PDF spreading across three pages. Visually verified the exported one-page PDF with all text and artwork.
+- TypeScript, lint, and production build passed. Changes are in `ad9e96a`; production remains unchanged.
+- Next: verify longer generated-book PDF output and edits after confirmation, then review production release readiness.
+
 ## Paid upload journey passed — 2026-10-07
 
 - Verified real upload → transcription → story and image generation → edit → save → sign out/in → full reload → reopen the same saved book, using fictional test audio and the previously paid development account.

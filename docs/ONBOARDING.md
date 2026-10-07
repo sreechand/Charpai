@@ -1,5 +1,13 @@
 # Onboarding
 
+## Microphone and PDF checks — 2026-10-07
+
+Verified built-in microphone capture in the local app: stopped and saved a roughly ten-second recording, played it without a browser media error, downloaded it, and reloaded to confirm recovery. FFmpeg successfully decoded 9.90 seconds of downloaded audio. This recording was not submitted for transcription; the separate paid upload test below verified generation.
+
+The sample book initially exported across three pages because editable text areas retained screen heights. Print-only flowing text and compact spacing fixed this. Re-exported through Chrome's Save as PDF and visually inspected the rendered result: one landscape page with complete text and artwork, without clipping. Output: `~/Downloads/charpai-export-test.pdf`. A longer generated book's PDF and edits after confirmation remain unverified.
+
+TypeScript, lint, production build, and whitespace checks passed. Code changes are already in commit `ad9e96a`; this entry records the remaining verification evidence. Production was not deployed. Next: review release readiness and outstanding checks.
+
 ## Full paid upload journey verified — 2026-10-07
 
 Used the development account that completed test payment `pay_Tkz2xS8n3qP1f2`. Uploaded a 37-second synthetic spoken interview with fictional family memories through Chrome's native file picker. Real transcription, composition, and image generation completed; the app presented a reviewable draft. Corrected the name/relationship fields and edited the title and dedication before Confirm changes. Convex saved the book and the library showed one story.
