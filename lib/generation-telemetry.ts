@@ -4,7 +4,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-export const PROMPT_VERSION = "2026-10-06.1";
+export const PROMPT_VERSION = "2026-10-09.2";
 
 export function diagnosticValue(value: unknown): unknown {
   if (value instanceof File) return { fileName: value.name, contentType: value.type, bytes: value.size };

@@ -22,6 +22,7 @@ import {
   normalizeIntake,
   type IntakePayload
 } from "@/lib/storybook";
+import { illustrateStorySections } from "@/lib/storybook-illustrations";
 import { buildStorybookImagePrompt } from "@/lib/storybook-image";
 import { maxAudioBytes } from "@/lib/files";
 import { api } from "@/convex/_generated/api";
@@ -156,16 +157,7 @@ async function composeStorybook(
     const draft = normalizeDraft({ ...generatedDraft, transcript }, inferredIntake);
     let warning = "";
 
-    try {
-      const illustration = await generateStorybookIllustration(openai, draft, authToken);
-      draft.illustrationStorageId = illustration.storageId;
-      draft.illustrationUrl = illustration.url;
-    } catch (error) {
-      warning =
-        error instanceof Error
-          ? `The story was created, but its illustration could not be generated. ${error.message}`
-          : "The story was created, but its illustration could not be generated.";
-    }
+    warning = await illustrateStorySections(draft, section => generateStorybookIllustration(openai, draft, authToken, section));
 
     return NextResponse.json({
       intake: inferredIntake,
@@ -179,7 +171,8 @@ async function composeStorybook(
 async function generateStorybookIllustration(
   openai: OpenAI,
   draft: ReturnType<typeof normalizeDraft>,
-  authToken: string | null
+  authToken: string | null,
+  section: import("@/lib/storybook").StorySection
 ) {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
   if (!convexUrl || !authToken) {
@@ -189,7 +182,7 @@ async function generateStorybookIllustration(
   const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare";
   const result = await openai.images.generate({
     model,
-    prompt: buildStorybookImagePrompt(draft),
+    prompt: buildStorybookImagePrompt(draft, section),
     size: "1024x1024",
     quality: "medium",
     background: "opaque",

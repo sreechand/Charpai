@@ -1,0 +1,16 @@
+.env
+.env.*
+.agents/
+.claude/
+.codex/
+.ok/
+.git/
+node_modules/
+.next/
+output/
+docs/
+scripts/
+PRODUCT.md
+ACTION_ITEMS.md
+public/landing/maker-workdesk.jpg
+*.tsbuildinfo

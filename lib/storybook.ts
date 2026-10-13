@@ -1,12 +1,16 @@
 import {
   charpaiStorybookPrompt,
   defaultCharpaiDraftDesign
-} from "@/lib/charpai-design-system";
+} from "./charpai-design-system";
 
 export type StorySection = {
   id: string;
   heading: string;
   body: string;
+  artifactSubject?: string;
+  artifactBrief?: string;
+  illustrationStorageId?: string;
+  illustrationUrl?: string | null;
 };
 
 export type CharpaiDraftDesign = {
@@ -178,7 +182,11 @@ export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {
     body:
       typeof section.body === "string" && section.body.trim()
         ? section.body.trim()
-        : fallback.sections[index]?.body || ""
+        : fallback.sections[index]?.body || "",
+    artifactSubject: stringOr(section.artifactSubject, index === 0 ? stringOr(source.stampSubject, "") : ""),
+    artifactBrief: stringOr(section.artifactBrief, index === 0 ? stringOr(source.illustrationBrief, "") : ""),
+    illustrationStorageId: stringOr(section.illustrationStorageId, ""),
+    illustrationUrl: stringOr(section.illustrationUrl, index === 0 ? stringOr(source.illustrationUrl, "") : "")
   }));
 
   return {
@@ -314,9 +322,9 @@ Return only valid JSON with this exact shape:
   "dedication": "one sentence dedication",
   "languageNote": "short reminder to review names, places and mixed-language phrases",
   "sections": [
-    {"id":"place","heading":"section heading","body":"120-180 words in the interviewee's first-person voice"},
-    {"id":"memory","heading":"section heading","body":"120-180 words in the interviewee's first-person voice"},
-    {"id":"another-memory","heading":"section heading","body":"120-180 words in the interviewee's first-person voice"}
+    {"id":"place","heading":"section heading","body":"up to 130 words in the interviewee's first-person voice, shorter when the source is brief","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"a single isolated object, its distinctive silhouette and material; no surrounding scene"},
+    {"id":"memory","heading":"section heading","body":"up to 130 words in the interviewee's first-person voice, shorter when the source is brief","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"recognizable features of this one object only"},
+    {"id":"another-memory","heading":"section heading","body":"up to 130 words in the interviewee's first-person voice, shorter when the source is brief","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"recognizable features of this one object only"}
   ],
   "closingNote": "one first-person closing paragraph using only what the interviewee said",
   "illustrationBrief": "one sentence visual direction for a small rubber-stamp field-note impression, no private data beyond names/places supplied",
@@ -335,6 +343,9 @@ Return only valid JSON with this exact shape:
 }
 
 Rules:
+- Each section is a story page. Select exactly ONE relevant physical artifact explicitly mentioned in that section's source memory: for example a coffee tumbler, chocolate wrapper, ruler, diploma, or house key. Do not invent possessions. When no handheld object is mentioned, use one concrete physical thing explicitly described, such as a doorway or flower.
+- artifactSubject is a short noun phrase naming that one thing. artifactBrief describes only its recognizable shape/material. No collections, scenery, people, secondary objects, room arrangements, or montages. Choose distinct artifacts across memories where evidence permits.
+- Keep section bodies to at most 130 words. There is NO minimum word count. Prefer a short faithful memory to padding, repeated facts, or invented sensory details. Separate paragraphs with blank lines.
 - Write every section body and the closingNote in the interviewee's first-person voice, using “I,” “we,” and “my” as the interviewee did. Never narrate the interviewee's life in the third person.
 - Keep the narrative as close as possible to the interviewee's own words, phrasing, emphasis, uncertainty, and point of view. Preserve distinctive expressions and concrete details from the transcript.
 - You may lightly reorder, combine, and bridge statements only when needed to make the story coherent and readable. Do not change what happened or make the interviewee sound more certain, polished, sentimental, or reflective than they were.
@@ -350,7 +361,8 @@ Rules:
 - If the transcript is thin, write a modest story and say what needs confirmation.
 - Preserve Indian family relationship terms and proper nouns.
 - Avoid melodrama. Make it feel like a family keepsake, not an obituary.
-- For stampSubject and stampMotifs, identify the minimum visual information needed for recognition: one landmark, object silhouette, food form, room arrangement, landscape contour, or family object. Do not make a catalogue.
+- For stampSubject and stampMotifs, identify one physical artifact explicitly supported by the transcript. All motifs are parts of that same object; no landmarks, room scenes or landscapes. Do not make a catalogue.
+- Describe illustration forms and materials, but never request additional colours. All artwork uses exactly one forest-green printing ink on ivory paper.
 - stampSubject is the reader-facing caption under the illustration. Name exactly one visible subject in a short noun phrase. Do not describe the style, materials, rubber stamp, field note, impression, or other objects. Keep detailed visual direction in illustrationBrief only.
 - Exclude people, crowds, vehicles, dense buildings, decorative clutter, slogans, captions, dates, labels and watermarks from the illustration concept.
 - For designSystem, choose only colors from the Charpai palette unless the transcript provides a specific color that is essential evidence.

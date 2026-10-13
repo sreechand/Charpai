@@ -119,7 +119,8 @@ test("one payment grants one book, retries reuse it, and clients cannot grant ac
   const runArgs = { generationId: begin.generationId, elderName: "Test", relationship: "Parent", originPlace: "Test village", languageMix: "English", hasAudio: false, photoCount: 0 };
   const runId = await user.mutation(api.runs.createRun, runArgs);
   expect(await user.mutation(api.runs.createRun, runArgs)).toBe(runId);
-  const { illustrationUrl, illustrationStorageId, ...draft } = demoDraft({ elderName: "Test" });
+  const { illustrationUrl, illustrationStorageId, ...baseDraft } = demoDraft({ elderName: "Test" });
+  const draft = { ...baseDraft, sections: baseDraft.sections.map(({ id, heading, body }) => ({ id, heading, body })) };
   void illustrationUrl; void illustrationStorageId;
   const page = await user.mutation(api.storybookPages.publish, { runId, draft });
   expect((await user.mutation(api.storybookPages.publish, { runId, draft }))._id).toBe(page._id);

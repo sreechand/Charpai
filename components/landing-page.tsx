@@ -1,14 +1,31 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { LaunchUpdates } from "./launch-updates";
 
 const steps = [{ id: "upload", label: "Recording" }, { id: "details", label: "Family details" }, { id: "spread", label: "First spread" }] as const;
 const barHeights = [18,34,52,40,26,60,72,44,30,56,66,38,22,48,70,58,32,20,44,62,50,28,36,64,54,30,24,46,68,40,26,52,60,34,22,42,56,30,18,26];
 
-export function LandingPage() {
+export function LandingPage({ launched }: { launched: boolean }) {
+  const ctaHref = launched ? "/app" : "#start";
+  const ctaLabel = launched ? "Start a storybook" : "Get launch updates";
   const [step, setStep] = useState<"upload" | "details" | "spread">("upload");
+  const [highlightedStep, setHighlightedStep] = useState<"upload" | "details" | "spread">("upload");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [previewSelected, setPreviewSelected] = useState(false);
+  useEffect(() => {
+    if (previewSelected) return;
+    const timers = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? [window.setTimeout(() => setStep("spread"), 0)]
+      : [window.setTimeout(() => setStep("details"), 3000), window.setTimeout(() => setStep("spread"), 6000)];
+    return () => timers.forEach(timer => window.clearTimeout(timer));
+  }, [previewSelected]);
+  useEffect(() => {
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700;
+    const timer = window.setTimeout(() => setHighlightedStep(step), delay);
+    return () => window.clearTimeout(timer);
+  }, [step]);
   return (
 <main style={{"fontFamily": "Hind, sans-serif", "color": "#1F1A14", "background": "#F2EEE3", "fontSize": "18px", "lineHeight": "1.6"}} className="landing-page">
 
@@ -22,31 +39,31 @@ export function LandingPage() {
 <a className="navlink" href="#questions-to-ask">What to ask</a>
 <a className="navlink" href="#maker">The maker</a>
 <a className="navlink" href="#faq">Questions</a>
-<a className="navlink" href="/app">Log in</a>
-<a className="btn btn-primary" href="/app">Start a storybook</a>
+{launched && <a className="navlink" href="/app">Log in</a>}
+<a className="btn btn-primary" href={ctaHref}>{ctaLabel}</a>
 </nav>
 </header>
 
 <section id="top" style={{"maxWidth": "1240px", "margin": "0 auto", "padding": "48px 32px 96px", "display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", "gap": "64px", "alignItems": "center"}}>
-<div style={{"display": "flex", "flexDirection": "column", "gap": "28px"}}>
+<div className="landing-hero-copy" style={{"display": "flex", "flexDirection": "column", "gap": "18px"}}>
 <p style={{"margin": "0", "fontSize": "15px", "letterSpacing": "0.14em", "textTransform": "uppercase", "color": "#6B4A2E"}}>Nostalgia trips → digital storybooks</p>
-<h1 style={{"margin": "0", "fontFamily": "'Source Serif 4', serif", "fontWeight": "700", "fontSize": "clamp(52px, 7vw, 96px)", "lineHeight": "1.02", "letterSpacing": "-0.025em"}}>Nani told it once. <em style={{"color": "#8E3A22"}}>Now it’s a book.</em></h1>
-<p style={{"margin": "0", "maxWidth": "32em", "fontSize": "20px", "color": "#33302B"}}>Record a nostalgia trip with someone in your family. Charpai picks out the people, places and years, drafts the first storybook spread, and leaves every line for you to edit before it becomes a digital keepsake.</p>
+<h1 style={{"margin": "0", "fontFamily": "'Source Serif 4', serif", "fontWeight": "700", "fontSize": "clamp(36px, 3.8vw, 52px)", "lineHeight": "1.02", "letterSpacing": "-0.025em"}}>The stories you grew up with. <em style={{"color": "#8E3A22"}}>A book to pass on.</em></h1>
+<p style={{"margin": "0", "maxWidth": "32em", "fontSize": "20px", "color": "#33302B"}}>Some stories only your family can tell. Immortalize them in their own words, in a book you can share and pass on.</p>
 <div style={{"display": "flex", "gap": "16px", "flexWrap": "wrap"}}>
-<a className="btn btn-primary" href="/app">Start a storybook</a>
+<a className="btn btn-primary" href={ctaHref}>{ctaLabel}</a>
 <a className="btn btn-ghost" href="#how">See how it works</a>
 </div>
-<p style={{"margin": "0", "fontSize": "15px", "color": "#6B4A2E"}}>₹500 per digital keepsake · Sign in with Google or email</p>
+<p style={{"margin": "0", "fontSize": "15px", "color": "#6B4A2E"}}>{launched ? "Sign in with Google or email" : "Launching October 15 · Get notified when we open"}</p>
 </div>
 
 <div style={{"display": "flex", "flexDirection": "column", "gap": "20px"}}>
 <div role="group" aria-label="Preview a step" style={{"display": "flex", "gap": "10px", "flexWrap": "wrap"}} className="preview-tabs">
-{steps.map((s, index) => (<button key={s.id} type="button" className={`tab ${step === s.id ? "tab-on" : ""}`} aria-pressed={step === s.id} onClick={() => setStep(s.id)}>{index + 1} · {s.label}</button>))}
+{steps.map((s, index) => (<button key={s.id} type="button" className={`tab ${highlightedStep === s.id ? "tab-on" : ""}`} aria-pressed={step === s.id} onClick={() => { setPreviewSelected(true); setStep(s.id); }}>{index + 1} · {s.label}</button>))}
 </div>
 
-<div style={{"background": "#FBF7EF", "border": "1px solid rgba(51,48,43,.2)", "borderRadius": "10px", "padding": "28px", "minHeight": "380px", "boxShadow": "14px 18px 0 rgba(51,48,43,.12)", "display": "flex", "flexDirection": "column", "justifyContent": "center"}} className="preview-card">
+<div style={{"background": "#FBF7EF", "border": "1px solid rgba(51,48,43,.2)", "borderRadius": "10px", "padding": "28px", "minHeight": "380px", "boxShadow": "14px 18px 0 rgba(51,48,43,.12)", "display": "grid", "alignItems": "center"}} className="preview-card">
 
-{step === "upload" && (<> 
+<div className="landing-preview-panel" data-active={step === "upload"} aria-hidden={step !== "upload"} inert={step !== "upload"}>
 <div style={{"display": "flex", "flexDirection": "column", "gap": "22px"}}>
 <p style={{"margin": "0", "fontSize": "14px", "letterSpacing": "0.12em", "textTransform": "uppercase", "color": "#6B4A2E"}}>Your recording</p>
 <div style={{"display": "flex", "alignItems": "center", "gap": "16px", "padding": "18px", "border": "1.5px dashed #A9875A", "borderRadius": "8px"}}>
@@ -61,11 +78,11 @@ export function LandingPage() {
 <div aria-hidden="true" style={{"display": "flex", "alignItems": "center", "gap": "4px", "height": "72px"}}>
 {barHeights.map((height, index) => (<div key={index} className="bar" style={{ height }} />))}
 </div>
-<p style={{"margin": "0", "fontSize": "16px", "color": "#33302B"}}>A phone voice memo works. So does a call you recorded across cities.</p>
+<p style={{"margin": "0", "fontSize": "16px", "color": "#33302B"}}>A voice memo over the phone. Or a call recorded across cities.</p>
 </div>
- </>)}
+</div>
 
-{step === "details" && (<> 
+<div className="landing-preview-panel" data-active={step === "details"} aria-hidden={step !== "details"} inert={step !== "details"}>
 <div style={{"display": "flex", "flexDirection": "column", "gap": "18px"}}>
 <p style={{"margin": "0", "fontSize": "14px", "letterSpacing": "0.12em", "textTransform": "uppercase", "color": "#6B4A2E"}}>Family details Charpai found · example</p>
 <div style={{"display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(170px, 1fr))", "gap": "12px"}}>
@@ -76,19 +93,19 @@ export function LandingPage() {
 </div>
 <p style={{"margin": "0", "fontSize": "16px", "color": "#33302B"}}>Names, relationships, places and years are pulled from the conversation, so the story starts from who your family actually is.</p>
 </div>
- </>)}
+</div>
 
-{step === "spread" && (<> 
-<div style={{"display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(180px, 1fr))", "gap": "0", "borderRadius": "4px", "overflow": "hidden", "boxShadow": "0 1px 0 rgba(51,48,43,.2)"}}>
-<div className="weave-soft" role="img" aria-label="Example storybook illustration area" style={{"minHeight": "280px", "display": "flex", "alignItems": "end", "padding": "12px"}}><span style={{"background": "#FBF7EF", "fontSize": "13px", "padding": "4px 10px", "color": "#33302B"}}>Example illustration</span></div>
-<div style={{"background": "#FFFDF8", "padding": "26px 24px", "display": "flex", "flexDirection": "column", "gap": "10px"}}>
+<div className="landing-preview-panel" data-active={step === "spread"} aria-hidden={step !== "spread"} inert={step !== "spread"}>
+<div className="landing-story-spread">
+<div className="landing-story-art"><Image src="/landing/ba-memory.png" alt="A textured stamp illustration of a shawl draped over a chair beside a window and staircase" width={1024} height={1024} /></div>
+<div className="landing-story-text" lang="en" tabIndex={0} role="region" aria-label="The fog, the pinch, and shouting — sample story">
 <div style={{"fontSize": "13px", "letterSpacing": "0.12em", "textTransform": "uppercase", "color": "#9A3B26"}}>Chapter one</div>
-<div style={{"fontFamily": "'Source Serif 4', serif", "fontSize": "28px", "lineHeight": "1.1"}}>The house by the river</div>
-<p style={{"margin": "0", "fontFamily": "'Source Serif 4', serif", "fontSize": "19px", "lineHeight": "1.45", "color": "#33302B"}}>Nani was the only girl among four brothers, and the first to wake each morning, because someone had to beat them to the river.<span className="caret"></span></p>
-<div style={{"fontSize": "14px", "color": "#6B4A2E"}}>Click any line to change it.</div>
+<div style={{"fontFamily": "'Source Serif 4', serif", "fontSize": "28px", "lineHeight": "1.1"}}>The fog, the pinch, and shouting</div>
+<p style={{"margin": "0", "fontFamily": "'Source Serif 4', serif", "fontSize": "19px", "lineHeight": "1.45", "color": "#33302B"}}>{"I remember one day when I was about five years old and Ba just starts screaming from upstairs, And I bapre, fog bog gharibi sheh, awo kado kado, which means, Good God! There is fog in my room, get it out! So we run upstairs like crazy people because when Ba screams, that's what you do. And there's no fog. It is a bright, sunny day. The diabetes has made Ba blind. It's a few months after Ba goes blind and because I'm five and my next cousin is six, we think it might be sort of interesting if we were to sneak into Ba's room to see if she could tell we were there. So we do. We creep in and of course Ba knows and she's, \"Koncheh bol!\" Which is, who's there? Speak! Well we're, you know, we're five and six, we're cool, we don't speak. We just wait until Ba falls back asleep. Then we decide it would be kind of cool if we pinched Ba. I pinched my blind grandmother. I reach out and I turn hard and she screams. We run out, the rest of the family is charging up the stairs."}</p>
+<div style={{"fontSize": "14px", "color": "#6B4A2E"}}>Example storybook</div>
 </div>
 </div>
- </>)}
+</div>
 
 </div>
 </div>
@@ -179,13 +196,18 @@ export function LandingPage() {
 <div style={{"display": "flex", "flexDirection": "column", "gap": "20px"}}>
 <p style={{"margin": "0", "fontSize": "15px", "letterSpacing": "0.18em", "textTransform": "uppercase", "color": "#6B4A2E"}}>A note from the maker</p>
 <div style={{"width": "120px", "height": "1.5px", "background": "#9A3B26"}}></div>
+
 </div>
 <div style={{"gridColumn": "span 2", "display": "flex", "flexDirection": "column", "gap": "24px", "maxWidth": "46em"}}>
 <h2 style={{"margin": "0", "fontFamily": "'Source Serif 4', serif", "fontWeight": "700", "fontSize": "clamp(40px, 4.5vw, 60px)", "lineHeight": "1.08", "letterSpacing": "-0.015em"}}>I’m Sreechand — a tinkerer and a lover of stories.</h2>
-<p style={{"margin": "0", "fontSize": "20px", "color": "#33302B"}}>I have always loved stories. They are what keep us going, and what our lives are built around. I’ve been a longtime listener of <em >The Moth</em> and <em >Story Collider</em>.</p>
+<p style={{"margin": "0", "fontSize": "20px", "color": "#33302B"}}>I have always loved stories. They are what keep us going, and what our lives are built around. I’ve been a longtime listener of <a href="https://www.themoth.org/" target="_blank" rel="noopener noreferrer"><em>The Moth</em></a> and <a href="https://www.storycollider.org/" target="_blank" rel="noopener noreferrer"><em>Story Collider</em></a>.</p>
+<p style={{"margin": "0", "fontSize": "20px", "color": "#33302B"}}>My friends and I have often talked about being the generation between oral traditions and digital life. We grew up hearing stories in courtyards, kitchens, on charpais, and during long journeys.</p>
+<p style={{"margin": "0", "fontSize": "20px", "color": "#33302B"}}>Now, those stories are disappearing with the people who carry them, while our phones fill up with everything but what matters.</p>
 <p style={{"margin": "0", "fontSize": "20px", "color": "#33302B"}}>Charpai began while I was talking to my mother about her first job. That conversation became the first story.</p>
-<span style={{"alignSelf": "start", "display": "inline-flex", "alignItems": "center", "gap": "8px", "minHeight": "44px", "color": "#8E3A22", "fontWeight": "600"}}>Follow @storygult
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></span>
+<p style={{"margin": "0", "fontSize": "20px", "color": "#33302B"}}>A recent <a href="https://x.com/SahilBloom/status/2106382863994073331" target="_blank" rel="noopener noreferrer">tweet by Sahil Bloom</a> was another inspiration to build Charpai.</p>
+<p style={{"margin": "0", "fontSize": "20px", "color": "#33302B"}}>That’s what I want Charpai to be: a bridge for what we cannot afford to lose. A gentle way to keep the conversation going — gathering the voices, memories, humour, recipes, places, and lessons that make a community, then shaping them into something that can be held, shared, and passed on.</p>
+<a href="https://x.com/storygult" target="_blank" rel="noopener noreferrer" style={{"alignSelf": "start", "display": "inline-flex", "alignItems": "center", "gap": "8px", "minHeight": "44px", "color": "#8E3A22", "fontWeight": "600"}}>Follow @storygult
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></a>
 </div>
 </section>
 
@@ -218,10 +240,8 @@ export function LandingPage() {
 <div style={{"maxWidth": "1240px", "margin": "0 auto", "padding": "112px 32px", "display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", "gap": "40px", "alignItems": "center"}}>
 <h2 style={{"margin": "0", "fontFamily": "'Source Serif 4', serif", "fontWeight": "700", "fontSize": "clamp(44px, 5.5vw, 76px)", "lineHeight": "1"}}>Someone in your family has a story only they can tell.</h2>
 <div style={{"display": "flex", "flexDirection": "column", "gap": "20px", "alignItems": "start"}}>
-<p style={{"margin": "0", "fontSize": "20px", "color": "#F8EAE3"}}>Take the nostalgia trip this week. Turn it into a storybook tonight.</p>
-<div style={{"display": "flex", "gap": "16px", "flexWrap": "wrap"}}>
-<a className="btn" href="/app" style={{"background": "#F2EEE3", "color": "#1F1A14"}}>Start a storybook</a>
-</div>
+<p style={{"margin": "0", "fontSize": "20px", "color": "#F8EAE3"}}>{launched ? "Take the nostalgia trip this week. Turn it into a storybook tonight." : "Charpai launches on October 15. Leave your email and we’ll let you know when it’s ready."}</p>
+{launched ? <a className="btn" href="/app" style={{"background": "#F2EEE3", "color": "#1F1A14"}}>Start a storybook</a> : <LaunchUpdates />}
 </div>
 </div>
 </section>

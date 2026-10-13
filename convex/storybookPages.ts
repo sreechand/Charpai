@@ -7,7 +7,10 @@ import type { Id } from "./_generated/dataModel";
 const storySection = v.object({
   id: v.string(),
   heading: v.string(),
-  body: v.string()
+  body: v.string(),
+  artifactSubject: v.optional(v.string()),
+  artifactBrief: v.optional(v.string()),
+  illustrationStorageId: v.optional(v.id("_storage"))
 });
 
 const charpaiDraftDesign = v.object({
@@ -36,6 +39,12 @@ const storybookDraft = v.object({
   designSystem: charpaiDraftDesign
 });
 
+const publicStorySection = v.object({
+  id: v.string(), heading: v.string(), body: v.string(),
+  artifactSubject: v.optional(v.string()), artifactBrief: v.optional(v.string()),
+  illustrationUrl: v.union(v.string(), v.null())
+});
+
 const publicStorybookPage = v.object({
   _id: v.id("storybookPages"),
   slug: v.string(),
@@ -43,7 +52,7 @@ const publicStorybookPage = v.object({
   subtitle: v.string(),
   dedication: v.string(),
   languageNote: v.string(),
-  sections: v.array(storySection),
+  sections: v.array(publicStorySection),
   closingNote: v.string(),
   illustrationBrief: v.string(),
   stampSubject: v.string(),
@@ -122,13 +131,26 @@ export const publish = mutation({
     if (!args.runId) throw new Error("A paid storybook is required to publish.");
     await requireOwnedRun(ctx, args.runId, ownerId);
     const existing = await ctx.db.query("storybookPages").withIndex("by_run", q => q.eq("runId", args.runId)).unique();
-    if (existing) return await toPublicPage(ctx, existing);
     if (args.draft.illustrationStorageId) {
       await requireOwnedStorybookImage(ctx, args.draft.illustrationStorageId, ownerId);
     }
 
+    for (const section of args.draft.sections) {
+      if (section.illustrationStorageId) {
+        await requireOwnedStorybookImage(ctx, section.illustrationStorageId, ownerId);
+      }
+    }
     const now = Date.now();
     const draft = sanitizeDraft(args.draft);
+    if (existing) {
+      if (existing.ownerId !== ownerId || existing.status !== "published") {
+        throw new Error("This storybook page is no longer available.");
+      }
+      await ctx.db.patch(existing._id, { ...draft, updatedAt: now });
+      const updated = await ctx.db.get(existing._id);
+      if (!updated) throw new Error("Saved page could not be loaded.");
+      return await toPublicPage(ctx, updated);
+    }
     const slug = await generateUniqueSlug(ctx, draft.title);
     const id = await ctx.db.insert("storybookPages", {
       ownerId,
@@ -247,7 +269,10 @@ function sanitizeDraft(draft: Infer<typeof storybookDraft>) {
     sections: draft.sections.slice(0, 5).map((section, index) => ({
       id: limitText(section.id, 48) || `section-${index + 1}`,
       heading: limitText(section.heading, 140),
-      body: limitText(section.body, 1800)
+      body: limitText(section.body, 8000),
+      artifactSubject: limitText(section.artifactSubject || "", 180),
+      artifactBrief: limitText(section.artifactBrief || "", 500),
+      illustrationStorageId: section.illustrationStorageId
     })),
     closingNote: limitText(draft.closingNote, 900),
     illustrationBrief: limitText(draft.illustrationBrief, 500),
@@ -280,7 +305,7 @@ async function toPublicPage(ctx: MutationCtx | QueryCtx, page: {
   subtitle: string;
   dedication: string;
   languageNote: string;
-  sections: Array<{ id: string; heading: string; body: string }>;
+  sections: Array<{ id: string; heading: string; body: string; artifactSubject?: string; artifactBrief?: string; illustrationStorageId?: Id<"_storage"> }>;
   closingNote: string;
   illustrationBrief: string;
   stampSubject: string;
@@ -309,7 +334,14 @@ async function toPublicPage(ctx: MutationCtx | QueryCtx, page: {
     subtitle: page.subtitle,
     dedication: page.dedication,
     languageNote: page.languageNote,
-    sections: page.sections,
+    sections: await Promise.all(page.sections.map(async (section, index) => ({
+      id: section.id, heading: section.heading, body: section.body,
+      artifactSubject: section.artifactSubject || (index === 0 ? page.stampSubject : ""),
+      artifactBrief: section.artifactBrief || (index === 0 ? page.illustrationBrief : ""),
+      illustrationUrl: section.illustrationStorageId
+        ? await ctx.storage.getUrl(section.illustrationStorageId)
+        : index === 0 ? illustrationUrl : null
+    }))),
     closingNote: page.closingNote,
     illustrationBrief: page.illustrationBrief,
     stampSubject: page.stampSubject,

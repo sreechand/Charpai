@@ -5,7 +5,10 @@ import { authTables } from "@convex-dev/auth/server";
 const storySection = v.object({
   id: v.string(),
   heading: v.string(),
-  body: v.string()
+  body: v.string(),
+  artifactSubject: v.optional(v.string()),
+  artifactBrief: v.optional(v.string()),
+  illustrationStorageId: v.optional(v.id("_storage"))
 });
 
 const charpaiDraftDesign = v.object({
@@ -158,6 +161,8 @@ export default defineSchema({
     name: v.string(),
     email: v.string(),
     note: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    consentAt: v.optional(v.number()),
     createdAt: v.number()
   }).index("by_email", ["email"])
 });

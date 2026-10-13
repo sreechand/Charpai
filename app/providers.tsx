@@ -230,6 +230,10 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
         return await publish({
           draft: {
             ...publishableDraft,
+            sections: publishableDraft.sections.map(({ illustrationUrl: sectionUrl, illustrationStorageId: sectionStorageId, ...section }) => {
+              void sectionUrl;
+              return { ...section, illustrationStorageId: sectionStorageId ? sectionStorageId as Id<"_storage"> : undefined };
+            }),
             illustrationStorageId: illustrationStorageId
               ? (illustrationStorageId as Id<"_storage">)
               : undefined

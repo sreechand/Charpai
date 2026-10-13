@@ -10,19 +10,17 @@ import {
   LogOut,
   Mail,
   Loader2,
-  Printer,
   Sparkles,
   Trash2
 } from "lucide-react";
 import Image from "next/image";
+import { StorybookReader } from "@/components/storybook-reader";
 import { AudioIntake } from "@/components/audio-intake";
 import {
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type FormEvent
 } from "react";
 
@@ -128,6 +126,7 @@ export function StorybookApp() {
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishedStoryPath, setPublishedStoryPath] = useState("");
   const [isBrandCompact, setIsBrandCompact] = useState(false);
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [generationStageId, setGenerationStageId] =
@@ -369,6 +368,7 @@ export function StorybookApp() {
       if (page) {
         evidence.recordEvent("publish_succeeded", { generationId: generationIdRef.current });
         publishedPath = `/s/${page.slug}`;
+        setPublishedStoryPath(publishedPath);
       }
     } catch (error) {
       evidence.recordEvent("publish_failed", { generationId: generationIdRef.current, error: error instanceof Error ? error.message : "Publishing failed" });
@@ -424,9 +424,16 @@ export function StorybookApp() {
   async function handleExport() {
     evidence.recordEvent("export_requested", { generationId: generationIdRef.current });
     if (runIdRef.current) {
+      const saved = await evidence.publishStoryPage(draft, runIdRef.current);
+      if (!saved) throw new Error("Save the story before exporting its QR code.");
+      setPublishedStoryPath(`/s/${saved.slug}`);
+    }
+  }
+
+  async function handleExportComplete() {
+    if (runIdRef.current) {
       await evidence.markExported(runIdRef.current, draft.title || `${intake.elderName}'s Story`);
     }
-    window.print();
   }
 
   function updateIntake(key: keyof IntakePayload, value: string) {
@@ -687,15 +694,7 @@ export function StorybookApp() {
               <p className="eyebrow">{hasPendingRecommendation ? "Pending preview" : "Storybook"}</p>
               <h2>{activeDraft.title || "Waiting for a recording"}</h2>
             </div>
-            <button
-              className="export-button"
-              type="button"
-              disabled={!draft.sections.length || hasPendingRecommendation}
-              onClick={handleExport}
-            >
-              <Printer size={18} aria-hidden />
-              Export PDF
-            </button>
+
           </div>
 
           <div id="storybook-print-area" className="storybook-page">
@@ -705,6 +704,10 @@ export function StorybookApp() {
                 photos={photos}
                 onDraftChange={updateDraft}
                 onSectionChange={updateSection}
+                storyUrl={hasPendingRecommendation ? undefined : publishedStoryPath}
+                allowExport={!hasPendingRecommendation}
+                onBeforeExport={handleExport}
+                onAfterExport={handleExportComplete}
               />
             ) : (
               <EmptyBook />
@@ -1079,243 +1082,30 @@ async function readGenerateResponse(response: Response): Promise<GenerateRespons
   };
 }
 
-function StorybookEditor({
-  draft,
-  photos,
-  onDraftChange,
-  onSectionChange
-}: {
-  draft: StorybookDraft;
-  photos: PhotoPreview[];
+function StorybookEditor({ draft, photos, onDraftChange, onSectionChange, storyUrl, allowExport, onBeforeExport, onAfterExport }: {
+  draft: StorybookDraft; photos: PhotoPreview[];
   onDraftChange: (key: keyof StorybookDraft, value: string) => void;
   onSectionChange: (id: string, patch: Partial<StorySection>) => void;
+  storyUrl?: string; allowExport: boolean; onBeforeExport: () => Promise<void>; onAfterExport: () => Promise<void>;
 }) {
-  return (
-    <article className="book" style={getDraftDesignStyle(draft)}>
-      <section className="visual-page" aria-label="Storybook illustration page">
-        <StampPoster draft={draft} />
-        {photos.length ? <PolaroidPhotos draft={draft} photos={photos} /> : null}
-      </section>
-
-      <section className="text-page" aria-label="Editable storybook text page">
-        <section className="book-cover">
-          <AutoSizeTextArea
-            className="book-title"
-            value={draft.title}
-            onChange={(value) => onDraftChange("title", value)}
-            ariaLabel="Storybook title"
-            rows={2}
-          />
-          <input
-            className="book-subtitle"
-            value={draft.subtitle}
-            onChange={(event) => onDraftChange("subtitle", event.target.value)}
-            aria-label="Storybook subtitle"
-          />
-          <AutoSizeTextArea
-            className="book-dedication"
-            value={draft.dedication}
-            onChange={(value) => onDraftChange("dedication", value)}
-            ariaLabel="Dedication"
-            rows={3}
-          />
-        </section>
-
-        {draft.sections.map((section) => (
-          <section className="story-section" key={section.id}>
-            <AutoSizeTextArea
-              className="story-section-heading"
-              value={section.heading}
-              onChange={(value) => onSectionChange(section.id, { heading: value })}
-              rows={2}
-              ariaLabel={`Heading for ${section.id}`}
-            />
-            <AutoSizeTextArea
-              className="story-section-body"
-              value={section.body}
-              onChange={(value) => onSectionChange(section.id, { body: value })}
-              rows={7}
-              ariaLabel={`Body for ${section.id}`}
-            />
-          </section>
-        ))}
-
-        <section className="closing-note">
-          <AutoSizeTextArea
-            value={draft.closingNote}
-            onChange={(value) => onDraftChange("closingNote", value)}
-            rows={4}
-            ariaLabel="Closing note"
-          />
-        </section>
-      </section>
-    </article>
-  );
-}
-
-function PolaroidPhotos({ draft, photos }: { draft: StorybookDraft; photos: PhotoPreview[] }) {
-  return (
-    <section className="scrapbook-photos" aria-label="Uploaded family photos">
-      {photos.map((photo, index) => (
-        <figure className={`polaroid polaroid-${(index % 3) + 1}`} key={photo.id}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo.url} alt={photo.name} />
-          <figcaption>{draft.photoCaptions[index] || photo.name}</figcaption>
-        </figure>
-      ))}
-    </section>
-  );
-}
-
-function StampPoster({ draft }: { draft: StorybookDraft }) {
-  const roughId = useId().replaceAll(":", "");
-  const stampKinds = deriveStampKinds(draft);
-
-  return (
-    <section className="field-note-poster" aria-label={draft.illustrationBrief || draft.stampSubject}>
-      {draft.illustrationUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          className="generated-story-image"
-          src={draft.illustrationUrl}
-          alt={draft.illustrationBrief || draft.stampSubject}
-        />
-      ) : (
-        <svg className="stamp-scene" viewBox="0 0 360 360" role="img" aria-hidden="true">
-          <defs>
-            <filter id={roughId}>
-              <feTurbulence
-                type="fractalNoise"
-                baseFrequency="0.9"
-                numOctaves="2"
-                seed="8"
-                result="noise"
-              />
-              <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" />
-            </filter>
-          </defs>
-          <g className="stamp-impression" filter={`url(#${roughId})`}>
-            <path
-              className="stamp-ghost"
-              d="M50 295c44-16 82-18 118-7 42 13 81 8 137-16"
-            />
-            {stampKinds.map((kind, index) => renderStampShape(kind, index))}
-            <path className="stamp-dark" d="M44 292c52 10 108 7 156-4 42-10 73-9 113 3" />
-          </g>
-        </svg>
-      )}
-    </section>
-  );
-}
-
-type StampKind = "landmark" | "home" | "food" | "water" | "tree" | "object";
-
-function deriveStampKinds(draft: StorybookDraft): StampKind[] {
-  const text = [
-    draft.stampSubject,
-    ...(draft.stampMotifs || []),
-    draft.illustrationBrief,
-    draft.title,
-    draft.subtitle,
-    draft.designSystem.memoryWorldLabel,
-    draft.designSystem.constructionNotes,
-    ...draft.designSystem.artifactForms
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  const selected: StampKind[] = [];
-  const add = (kind: StampKind) => {
-    if (!selected.includes(kind)) {
-      selected.push(kind);
-    }
-  };
-
-  if (/temple|mandir|church|mosque|market|bazaar|arch|palace|fort|school|station/.test(text)) {
-    add("landmark");
-  }
-  if (/home|house|door|courtyard|room|kitchen|street|village|lane/.test(text)) {
-    add("home");
-  }
-  if (/coffee|tea|food|smell|rice|mango|pickle|meal|kitchen|tiffin|sweet/.test(text)) {
-    add("food");
-  }
-  if (/river|lake|sea|rain|water|well|shore|pond|monsoon/.test(text)) {
-    add("water");
-  }
-  if (/tree|garden|field|farm|leaf|flower|jasmine|coconut/.test(text)) {
-    add("tree");
-  }
-  if (/photo|object|book|letter|radio|clock|sari|saree|toy|tool/.test(text)) {
-    add("object");
-  }
-
-  (["landmark", "home", "food", "water"] as StampKind[]).forEach(add);
-  return selected.slice(0, 5);
-}
-
-function renderStampShape(kind: StampKind, index: number) {
-  const x = 54 + index * 54;
-
-  switch (kind) {
-    case "landmark":
-      return (
-        <g className="stamp-form" key={`${kind}-${index}`} transform={`translate(${x} 212)`}>
-          <path className="stamp-ochre" d="M4 62h44v24H4z" />
-          <path className="stamp-dark" d="M7 86V50c0-18 10-30 19-30s19 12 19 30v36" />
-          <path className="stamp-brick" d="M16 86V61c0-9 5-15 10-15s10 6 10 15v25" />
-          <path className="stamp-dark" d="M2 50h48M8 38h36M26 8v13" />
-        </g>
-      );
-    case "home":
-      return (
-        <g className="stamp-form" key={`${kind}-${index}`} transform={`translate(${x} 222)`}>
-          <path className="stamp-green" d="M4 40 27 18l24 22" />
-          <path className="stamp-dark" d="M11 40v42h33V40" />
-          <path className="stamp-ochre" d="M24 82V57h10v25" />
-          <path className="stamp-dark" d="M18 51h8M37 51h7" />
-        </g>
-      );
-    case "food":
-      return (
-        <g className="stamp-form" key={`${kind}-${index}`} transform={`translate(${x} 231)`}>
-          <path className="stamp-brick" d="M12 24h30l-5 43H17z" />
-          <path className="stamp-dark" d="M8 24h38M17 67h21M18 12c3-8 15-8 18 0" />
-          <path className="stamp-ochre" d="M12 77c11 6 23 6 35 0" />
-        </g>
-      );
-    case "water":
-      return (
-        <g className="stamp-form" key={`${kind}-${index}`} transform={`translate(${x} 242)`}>
-          <path className="stamp-blue" d="M2 24c14-11 25 11 40 0s27 9 43-1" />
-          <path className="stamp-blue" d="M8 43c12-9 23 8 37-1s23 8 37-2" />
-          <path className="stamp-dark" d="M16 65c16-5 34-5 52 0" />
-        </g>
-      );
-    case "tree":
-      return (
-        <g className="stamp-form" key={`${kind}-${index}`} transform={`translate(${x} 218)`}>
-          <path className="stamp-green" d="M27 12c24 6 28 39 4 48-28 7-38-27-17-42 4-4 8-6 13-6z" />
-          <path className="stamp-dark" d="M28 55v31M18 86h25M28 65l-12-12M29 70l15-17" />
-        </g>
-      );
-    case "object":
-      return (
-        <g className="stamp-form" key={`${kind}-${index}`} transform={`translate(${x} 228)`}>
-          <path className="stamp-ochre" d="M9 17h41v54H9z" />
-          <path className="stamp-dark" d="M13 21h33v33H13zM13 71h33M18 61h22" />
-          <path className="stamp-brick" d="M19 47 29 35l10 12" />
-        </g>
-      );
-  }
-}
-
-function getDraftDesignStyle(draft: StorybookDraft) {
-  return {
-    "--memory-accent": draft.designSystem.accent,
-    "--memory-deep": draft.designSystem.deep,
-    "--hand-ink": draft.designSystem.handInk
-  } as CSSProperties;
+  return <>
+    <StorybookReader story={draft} storyUrl={storyUrl} showExport={allowExport} onBeforeExport={onBeforeExport} onAfterExport={onAfterExport} />
+    <details className="folio-edit-fields screen-only">
+      <summary>Edit story text</summary>
+      <label>Book title<input value={draft.title} onChange={event => onDraftChange("title", event.target.value)} /></label>
+      <label>Subtitle<input value={draft.subtitle} onChange={event => onDraftChange("subtitle", event.target.value)} /></label>
+      <label>Dedication<AutoSizeTextArea value={draft.dedication} onChange={value => onDraftChange("dedication", value)} rows={3} ariaLabel="Dedication" /></label>
+      {draft.sections.map(section => <div key={section.id}>
+        <label>Page heading<input value={section.heading} onChange={event => onSectionChange(section.id, { heading: event.target.value })} aria-label={`Heading for ${section.id}`} /></label>
+        <label>Story text<AutoSizeTextArea value={section.body} onChange={value => onSectionChange(section.id, { body: value })} rows={7} ariaLabel={`Body for ${section.id}`} /></label>
+      </div>)}
+      <label>Closing note<AutoSizeTextArea value={draft.closingNote} onChange={value => onDraftChange("closingNote", value)} rows={4} ariaLabel="Closing note" /></label>
+      {photos.length ? <section className="scrapbook-photos" aria-label="Uploaded family photos">{photos.map(photo => <figure key={photo.id}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={photo.url} alt={photo.name} />
+      </figure>)}</section> : null}
+    </details>
+  </>;
 }
 
 function AutoSizeTextArea({
