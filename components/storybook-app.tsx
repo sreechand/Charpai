@@ -978,7 +978,7 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
       <div className="auth-card">
         <div className="auth-card-heading">
           <p className="eyebrow">Login</p>
-          <h2>Sign in to Charpai</h2>
+          <h2>{mode === "signUp" ? "Sign up on Charpai" : "Sign in to Charpai"}</h2>
         </div>
 
         <button
@@ -1020,35 +1020,36 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
             />
           </label>
 
-          <button
-            className="primary-button"
-            type="submit"
-            disabled={isSubmitting || auth.status === "loading" || unavailable}
-          >
-            {isSubmitting || auth.status === "loading" ? (
-              <>
-                <Loader2 className="spin" size={18} aria-hidden /> Checking
-              </>
-            ) : mode === "signUp" ? (
-              <>
-                <Mail size={18} aria-hidden /> Create account
-              </>
-            ) : (
-              <>
-                <LockKeyhole size={18} aria-hidden /> Sign in
-              </>
-            )}
-          </button>
+          <div className="auth-actions">
+            <button
+              className="form-switch"
+              type="button"
+              disabled={isSubmitting || unavailable}
+              onClick={() => { setAuthMessage(""); setMode((current) => (current === "signIn" ? "signUp" : "signIn")); }}
+            >
+              {mode === "signIn" ? "Sign up" : "Sign in"}
+            </button>
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={isSubmitting || auth.status === "loading" || unavailable}
+            >
+              {isSubmitting || auth.status === "loading" ? (
+                <>
+                  <Loader2 className="spin" size={18} aria-hidden /> Checking
+                </>
+              ) : mode === "signUp" ? (
+                <>
+                  <Mail size={18} aria-hidden /> Create account
+                </>
+              ) : (
+                <>
+                  <LockKeyhole size={18} aria-hidden /> Sign in
+                </>
+              )}
+            </button>
+          </div>
         </form>
-
-        <button
-          className="form-switch"
-          type="button"
-          disabled={isSubmitting || unavailable}
-          onClick={() => setMode((current) => (current === "signIn" ? "signUp" : "signIn"))}
-        >
-          {mode === "signIn" ? "Create an email account" : "Use an existing account"}
-        </button>
 
         {unavailable ? (
           <div className="notice warning">

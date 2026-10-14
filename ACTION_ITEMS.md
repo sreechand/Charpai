@@ -241,3 +241,5 @@ Items 1 and 8 overlap and were combined in the later build plan.
 - 2026-10-13: User requested committing/pushing all current project work to GitHub `main`. GitHub identifies the repository as `sreechand/Charpai` (old `agara` remote redirects). Includes code, assets, tests and project notes; local secrets/settings remain excluded. Latest homepage wording, crossfade, card-first highlight and social link are not yet live. Next: publish those changes when requested.
 
 - 2026-10-13: User authorized metadata removal from the local workdesk image. Removed it losslessly, preserved upright orientation and dimensions, and kept the original untouched. Include the clean image in the GitHub checkpoint; it remains absent from the website.
+
+- 2026-10-14: Updated login/signup wording and side-by-side actions: signup shows “Sign up on Charpai”, Sign in left/Create account right; login shows Sign up left/Sign in right. Browser checked at 1267px, 375px and 320px; targeted ESLint and TypeScript pass. GitHub save requested; no publication requested. Details: `docs/LOGIN_SCREENS.md`. Next: publish when requested.
