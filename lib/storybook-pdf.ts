@@ -13,6 +13,8 @@ export async function createStorybookPdf(container: HTMLElement, title: string) 
   ]);
   const pdf = await PDFDocument.create();
   pdf.setTitle(title); pdf.setCreator("Charpai");
+  // The front cover is a single right-hand page; even pages face left afterwards.
+  pdf.catalog.set(PDFName.of("PageLayout"), PDFName.of("TwoPageRight"));
   // Embedded font rules are shared by every page, rather than fetched per page.
   const fontEmbedCSS = await getFontEmbedCSS(pages[0]);
   const width = 148 * 72 / 25.4;
@@ -20,7 +22,8 @@ export async function createStorybookPdf(container: HTMLElement, title: string) 
   for (const node of pages) {
     const prose = node.querySelector<HTMLElement>(".folio-prose");
     const artwork = node.querySelector<HTMLElement>(".folio-artifact");
-    if (prose && prose.offsetTop + prose.scrollHeight > (artwork ? artwork.offsetTop - 16 : node.clientHeight - 60)) {
+    const footer = node.querySelector<HTMLElement>("footer");
+    if (prose && prose.offsetTop + prose.scrollHeight > (artwork ? artwork.offsetTop - 16 : footer ? footer.offsetTop - 16 : node.clientHeight - 60)) {
       throw new Error("One page needs more room. Wait for the layout to finish and try again.");
     }
     const png = await toPng(node, { pixelRatio: 2.5, width: 640, height: 908, fontEmbedCSS,

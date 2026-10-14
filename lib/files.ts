@@ -1,4 +1,5 @@
 export type PhotoPreview = {
+  file?: File;
   id: string;
   name: string;
   url: string;
@@ -50,6 +51,7 @@ export function readPhotoPreviews(files: FileList | null): Promise<PhotoPreview[
           reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
           reader.onload = () =>
             resolve({
+              file,
               id: `${file.name}-${file.size}-${index}`,
               name: file.name,
               url: String(reader.result)

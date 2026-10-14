@@ -1,0 +1,34 @@
+import { chromium } from 'playwright';
+import { randomUUID } from 'node:crypto';
+import assert from 'node:assert/strict';
+const base='https://charpai.sreechand.pm';
+const browser=await chromium.launch();
+try {
+ const page=await browser.newPage();
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ const email=`release-check-${randomUUID()}@example.invalid`,password=randomUUID()+randomUUID();
+ await page.goto(base+'/app/login');
+ await page.getByRole('heading',{name:'Sign in to Charpai'}).waitFor();
+ await page.getByRole('button',{name:'Sign up',exact:true}).click();
+ await page.getByLabel('Email',{exact:true}).fill(email);
+ await page.getByLabel('Password',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'Create account',exact:true}).click();
+ await page.getByRole('heading',{name:'One storybook. Four chances to get it right.'}).waitFor();
+ await page.getByRole('button',{name:'Pay ₹200.00',exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Pay ₹200.00',exact:true}).isEnabled(),true);
+ await page.reload();
+ await page.getByRole('heading',{name:'One storybook. Four chances to get it right.'}).waitFor();
+ await page.getByRole('button',{name:'Sign out',exact:true}).click();
+ await page.getByLabel('Email',{exact:true}).fill(email);
+ await page.getByLabel('Password',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.getByRole('heading',{name:'One storybook. Four chances to get it right.'}).waitFor();
+ await page.screenshot({path:'/private/tmp/charpai-live-customer-access.png',fullPage:true});
+ await page.goto(base+'/');
+ assert.equal(await page.getByRole('link',{name:/log in|sign in/i}).count(),0);
+ assert.match(await page.locator('body').innerText(),/October 15/);
+ assert.deepEqual(errors,[]);
+ const unauthorized=await fetch(base+'/api/create-order',{method:'POST'});
+ assert.equal(unauthorized.status,401);
+ console.log('PASS: live unlisted login, signup, persistent session, sign-out/sign-in, hidden homepage login, unauthorized payment rejected. Live ₹200 checkout is available.');
+} finally {await browser.close();}

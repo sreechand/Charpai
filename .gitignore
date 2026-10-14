@@ -15,3 +15,5 @@ convex/.env.local
 skills-lock.json
 AGENTS.md
 CLAUDE.md
+
+.herenow/

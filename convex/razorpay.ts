@@ -25,8 +25,18 @@ export const checkoutDetails = action({
   handler: async (ctx): Promise<{ amount: number | null; currency: string; testMode: boolean }> => {
     const userId = await ctx.runQuery(internal.payments.identity, {});
     if (!userId) throw new ConvexError({ status: 401, message: "Sign in before paying." });
+    const pending = await ctx.runQuery(internal.payments.pendingOrders, { userId });
+    if (pending.length) {
+      const razorpay = client();
+      for (const order of pending) {
+        const payments = await razorpay.orders.fetchPayments(order.orderId).catch(providerError);
+        const captured = payments.items.find(payment => payment.status === "captured" &&
+          payment.order_id === order.orderId && Number(payment.amount) === order.amount && payment.currency === order.currency);
+        if (captured) await ctx.runMutation(internal.payments.markPaid, { userId, orderId: order.orderId, paymentId: captured.id });
+      }
+    }
     const amount = Number(env.RAZORPAY_AMOUNT_PAISE);
-    return { amount: Number.isSafeInteger(amount) && amount >= 100 ? amount : null,
+    return { amount: env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET && Number.isSafeInteger(amount) && amount >= 100 ? amount : null,
       currency: "INR", testMode: Boolean(env.RAZORPAY_KEY_ID?.startsWith("rzp_test_")) };
   }
 });
@@ -46,7 +56,7 @@ export const createOrder = action({
     if (Number(order.amount) !== amount || order.currency !== "INR") {
       throw new ConvexError({ status: 500, message: "Razorpay returned an unexpected order." });
     }
-    await ctx.runMutation(internal.payments.saveOrder, { userId, orderId: order.id, amount, currency: "INR" });
+    await ctx.runMutation(internal.payments.saveOrder, { userId, orderId: order.id, amount, currency: "INR", creditsPerPurchase: 4 });
     return { order_id: order.id, amount, currency: "INR", key_id: env.RAZORPAY_KEY_ID! };
   }
 });

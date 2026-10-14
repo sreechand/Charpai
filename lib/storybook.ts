@@ -1,3 +1,4 @@
+import type { SourceLink, CoverageEntry } from "./storybook-source";
 import {
   charpaiStorybookPrompt,
   defaultCharpaiDraftDesign
@@ -11,6 +12,7 @@ export type StorySection = {
   artifactBrief?: string;
   illustrationStorageId?: string;
   illustrationUrl?: string | null;
+  sourceLinks?: SourceLink[];
 };
 
 export type CharpaiDraftDesign = {
@@ -24,6 +26,10 @@ export type CharpaiDraftDesign = {
 };
 
 export type StorybookDraft = {
+  sourceRevision?: number;
+  coverage?: CoverageEntry[];
+  coverageNeedsReview?: boolean;
+  shareRecording?: boolean;
   title: string;
   subtitle: string;
   dedication: string;
@@ -166,49 +172,21 @@ export function demoIntake(input: Partial<IntakePayload> = {}): IntakePayload {
 }
 
 export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {}): StorybookDraft {
-  if (!value || typeof value !== "object") {
-    return demoDraft(input);
-  }
-
+  if (!value || typeof value !== "object") throw new Error("The generated story is incomplete. Your source is saved; retry writing.");
   const source = value as Partial<StorybookDraft>;
-  const fallback = demoDraft(input);
-  const rawSections = Array.isArray(source.sections) ? source.sections : fallback.sections;
-  const sections = rawSections.slice(0, 5).map((section, index) => ({
-    id: typeof section.id === "string" && section.id ? section.id : `section-${index + 1}`,
-    heading:
-      typeof section.heading === "string" && section.heading.trim()
-        ? section.heading.trim()
-        : fallback.sections[index]?.heading || `Memory ${index + 1}`,
-    body:
-      typeof section.body === "string" && section.body.trim()
-        ? section.body.trim()
-        : fallback.sections[index]?.body || "",
-    artifactSubject: stringOr(section.artifactSubject, index === 0 ? stringOr(source.stampSubject, "") : ""),
-    artifactBrief: stringOr(section.artifactBrief, index === 0 ? stringOr(source.illustrationBrief, "") : ""),
-    illustrationStorageId: stringOr(section.illustrationStorageId, ""),
-    illustrationUrl: stringOr(section.illustrationUrl, index === 0 ? stringOr(source.illustrationUrl, "") : "")
-  }));
-
-  return {
-    title: stringOr(source.title, fallback.title),
-    subtitle: stringOr(source.subtitle, fallback.subtitle),
-    dedication: stringOr(source.dedication, fallback.dedication),
-    languageNote: stringOr(source.languageNote, fallback.languageNote),
-    sections: sections.length ? sections : fallback.sections,
-    closingNote: stringOr(source.closingNote, fallback.closingNote),
-    transcript: stringOr(source.transcript, fallback.transcript),
-    illustrationBrief: stringOr(source.illustrationBrief, fallback.illustrationBrief),
-    stampSubject: stringOr(source.stampSubject, fallback.stampSubject),
-    stampMotifs: Array.isArray(source.stampMotifs)
-      ? source.stampMotifs.map((motif) => String(motif)).slice(0, 6)
-      : fallback.stampMotifs,
-    illustrationStorageId: stringOr(source.illustrationStorageId, fallback.illustrationStorageId),
-    illustrationUrl: stringOr(source.illustrationUrl, fallback.illustrationUrl),
-    photoCaptions: Array.isArray(source.photoCaptions)
-      ? source.photoCaptions.map((caption) => String(caption)).slice(0, 3)
-      : fallback.photoCaptions,
-    designSystem: normalizeCharpaiDraftDesign(source.designSystem, fallback.designSystem)
-  };
+  if (typeof source.title !== "string" || !source.title.trim() || !Array.isArray(source.sections) || !source.sections.length) throw new Error("The generated story has no title or memories.");
+  const sections = source.sections.map((section, index) => {
+    if (!section || typeof section.heading !== "string" || !section.heading.trim() || typeof section.body !== "string" || !section.body.trim()) throw new Error(`Memory ${index + 1} is incomplete. No placeholder text was added.`);
+    return { ...section, id: section.id || `section-${index + 1}`, heading: section.heading, body: section.body,
+      artifactSubject: section.artifactSubject || "", artifactBrief: section.artifactBrief || "",
+      illustrationStorageId: section.illustrationStorageId || "", illustrationUrl: section.illustrationUrl || "" };
+  });
+  return { ...emptyDraft(), ...source, sections, title: source.title,
+    subtitle: source.subtitle || "", dedication: source.dedication || input.dedication || "",
+    languageNote: source.languageNote || "", closingNote: source.closingNote || "", transcript: source.transcript || "",
+    illustrationBrief: source.illustrationBrief || "", stampSubject: source.stampSubject || "", stampMotifs: source.stampMotifs || [],
+    illustrationStorageId: source.illustrationStorageId || "", illustrationUrl: source.illustrationUrl || "", photoCaptions: source.photoCaptions || [],
+    designSystem: normalizeCharpaiDraftDesign(source.designSystem, defaultCharpaiDraftDesign(input.originPlace)) };
 }
 
 export function normalizeIntake(value: unknown, fallback: Partial<IntakePayload> = {}): IntakePayload {
@@ -292,7 +270,7 @@ export function buildStoryPrompt(input: IntakePayload, transcript: string) {
   const originPlace = input.originPlace || "home";
 
   return `
-Create a short keepsake storybook from a family interview transcript.
+Create a complete keepsake storybook from a family interview transcript.
 
 ${charpaiStorybookPrompt}
 
@@ -322,9 +300,9 @@ Return only valid JSON with this exact shape:
   "dedication": "one sentence dedication",
   "languageNote": "short reminder to review names, places and mixed-language phrases",
   "sections": [
-    {"id":"place","heading":"section heading","body":"up to 130 words in the interviewee's first-person voice, shorter when the source is brief","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"a single isolated object, its distinctive silhouette and material; no surrounding scene"},
-    {"id":"memory","heading":"section heading","body":"up to 130 words in the interviewee's first-person voice, shorter when the source is brief","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"recognizable features of this one object only"},
-    {"id":"another-memory","heading":"section heading","body":"up to 130 words in the interviewee's first-person voice, shorter when the source is brief","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"recognizable features of this one object only"}
+    {"id":"place","heading":"section heading","body":"complete narration in the interviewee's first-person voice","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"a single isolated object, its distinctive silhouette and material; no surrounding scene"},
+    {"id":"memory","heading":"section heading","body":"complete narration in the interviewee's first-person voice","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"recognizable features of this one object only"},
+    {"id":"another-memory","heading":"section heading","body":"complete narration in the interviewee's first-person voice","artifactSubject":"one concrete object mentioned in this memory","artifactBrief":"recognizable features of this one object only"}
   ],
   "closingNote": "one first-person closing paragraph using only what the interviewee said",
   "illustrationBrief": "one sentence visual direction for a small rubber-stamp field-note impression, no private data beyond names/places supplied",
@@ -345,7 +323,7 @@ Return only valid JSON with this exact shape:
 Rules:
 - Each section is a story page. Select exactly ONE relevant physical artifact explicitly mentioned in that section's source memory: for example a coffee tumbler, chocolate wrapper, ruler, diploma, or house key. Do not invent possessions. When no handheld object is mentioned, use one concrete physical thing explicitly described, such as a doorway or flower.
 - artifactSubject is a short noun phrase naming that one thing. artifactBrief describes only its recognizable shape/material. No collections, scenery, people, secondary objects, room arrangements, or montages. Choose distinct artifacts across memories where evidence permits.
-- Keep section bodies to at most 130 words. There is NO minimum word count. Prefer a short faithful memory to padding, repeated facts, or invented sensory details. Separate paragraphs with blank lines.
+- Preserve every supplied narration and detail. There is no editorial word, chapter, or book-length limit. Separate distinct memories into as many sections as needed. Separate paragraphs with blank lines; never shorten for layout.
 - Write every section body and the closingNote in the interviewee's first-person voice, using “I,” “we,” and “my” as the interviewee did. Never narrate the interviewee's life in the third person.
 - Keep the narrative as close as possible to the interviewee's own words, phrasing, emphasis, uncertainty, and point of view. Preserve distinctive expressions and concrete details from the transcript.
 - You may lightly reorder, combine, and bridge statements only when needed to make the story coherent and readable. Do not change what happened or make the interviewee sound more certain, polished, sentimental, or reflective than they were.

@@ -1,5 +1,11 @@
 # Generation diagnostics
 
+## Latest audit — 14 October 2026
+
+See [the full telemetry audit](TELEMETRY_AUDIT.md) for the read-only production/development inventory, prioritized fixes and missing product-wide events. Inspected all 16 saved generation requests and their 120 diagnostic artifacts. Production has one instrumented attempt, which timed out and remains `started`; older runs do not provide complete historical generation telemetry. Development includes deliberate mock failures and real AI tests, so combined counts are not a customer failure rate.
+
+The October 6 implementation/release notes below are historical. The website has since been published, production now writes generation diagnostics, and PDF export now builds a downloadable PDF rather than relying solely on browser printing. Product-wide coverage, reliable terminal states, release/test identification, source coverage, delivery outcomes and retention remain incomplete. New background-generation work visible locally during the audit was not verified or deployed by the audit.
+
 Implemented on 6 October 2026. The app records diagnostics in Convex; it does not send family content to a separate analytics service.
 
 ## Database inspection before adding diagnostics

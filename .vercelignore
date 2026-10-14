@@ -4,6 +4,7 @@
 .claude/
 .codex/
 .ok/
+.specstory/
 .git/
 node_modules/
 .next/
@@ -14,3 +15,12 @@ PRODUCT.md
 ACTION_ITEMS.md
 public/landing/maker-workdesk.jpg
 *.tsbuildinfo
+
+.herenow/
+dist/
+
+# Project notes stay in GitHub, outside the website upload.
+/*.md
+.interface-design/
+idea-lock-references/
+resources/

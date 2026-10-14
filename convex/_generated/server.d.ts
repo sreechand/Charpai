@@ -30,6 +30,12 @@ import type { DataModel } from "./dataModel.js";
 type Env = {
   readonly CONVEX_CLOUD_URL: string;
   readonly CONVEX_SITE_URL: string;
+  readonly EMAIL_ENABLED: string | undefined;
+  readonly EMAIL_FROM: string | undefined;
+  readonly EMAIL_OWNER_TO: string | undefined;
+  readonly EMAIL_USER_EVENTS_TO: string | undefined;
+  readonly GENERATION_BACKEND_URL: string | undefined;
+  readonly GENERATION_WORKER_URL: string | undefined;
   readonly GOOGLE_CLIENT_ID: string | undefined;
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
   readonly JWKS: string | undefined;
@@ -38,6 +44,8 @@ type Env = {
   readonly RAZORPAY_AMOUNT_PAISE: string | undefined;
   readonly RAZORPAY_KEY_ID: string | undefined;
   readonly RAZORPAY_KEY_SECRET: string | undefined;
+  readonly RESEND_API_KEY: string | undefined;
+  readonly RESEND_WEBHOOK_SECRET: string | undefined;
   readonly SITE_URL: string | undefined;
 };
 

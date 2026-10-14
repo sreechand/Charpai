@@ -1,0 +1,33 @@
+import { build } from "esbuild";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { createRequire } from "node:module";
+
+const root = process.cwd();
+const launched = process.env.CHARPAI_LAUNCHED === "true";
+const output = path.join(root, "dist/herenow-landing");
+const imagePath = path.join(root, "sites/landing/image.tsx");
+const plugins = [{ name: "standalone-images", setup(bundler) {
+  bundler.onResolve({ filter: /^next\/image$/ }, () => ({ path: imagePath }));
+} }];
+const shared = { bundle: true, jsx: "automatic", plugins, define: { "process.env.NODE_ENV": '"production"' } };
+await fs.mkdir(path.join(output, "assets"), { recursive: true });
+await fs.mkdir(path.join(output, ".herenow"), { recursive: true });
+await build({ ...shared, entryPoints: ["sites/landing/entry.tsx"], outfile: path.join(output, "assets/homepage.js"), platform: "browser", format: "esm", minify: true, target: ["es2022"] });
+const server = await build({ ...shared, stdin: { contents: `import {renderToString} from "react-dom/server"; import {LandingPage} from "./components/landing-page"; export const html=renderToString(<LandingPage launched={${launched}} appUrl="https://charpai.sreechand.pm/app"/>);`, resolveDir: root, loader: "tsx" }, platform: "node", format: "cjs", packages: "external", write: false });
+const rendered = { exports: {} };
+new Function("require", "module", "exports", server.outputFiles[0].text)(createRequire(import.meta.url), rendered, rendered.exports);
+const siteUrl = "https://charpai.stories.here.now/";
+const title = "Charpai — nostalgia trips into storybooks";
+const description = "Some stories only your family can tell. Immortalize them in their own words, in a book you can share and pass on.";
+const previewImage = new URL("/landing/charpai-link-preview.png", siteUrl).href;
+const previewAlt = "Charpai — a woven charpai above the word charpai";
+const html = `<!doctype html><html lang="en" data-launched="${launched}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:site_name" content="Charpai"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="${siteUrl}"><meta property="og:image" content="${previewImage}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="601"><meta property="og:image:height" content="161"><meta property="og:image:alt" content="${previewAlt}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${previewImage}"><meta name="twitter:image:alt" content="${previewAlt}"><link rel="icon" href="/icon.png" type="image/png"><link rel="stylesheet" href="/assets/landing.css"><style>html,body{margin:0;padding:0}body{background:#f2eee3}button,input{font:inherit}</style></head><body><div id="root">${rendered.exports.html}</div><script type="module" src="/assets/homepage.js"></script></body></html>`;
+await fs.writeFile(path.join(output, "index.html"), html);
+await fs.copyFile("app/landing.css", path.join(output, "assets/landing.css"));
+await fs.copyFile("app/icon.png", path.join(output, "icon.png"));
+await fs.mkdir(path.join(output, "landing"), { recursive: true });
+await Promise.all(["charpai-logo.png", "ba-memory.png", "charpai-link-preview.png"].map(name => fs.copyFile(path.join("public/landing", name), path.join(output, "landing", name))));
+await fs.cp("public/landing/fonts", path.join(output, "landing/fonts"), { recursive: true });
+await fs.writeFile(path.join(output, ".herenow/proxy.json"), JSON.stringify({ proxies: { "/api/updates": { upstream: "https://charpai.sreechand.pm/api/updates", method: "POST" } } }, null, 2));
+console.log(`Standalone homepage built: ${output}`);

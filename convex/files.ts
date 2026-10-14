@@ -9,8 +9,8 @@ export const generateUploadUrl = mutation({
   handler: async (ctx) => {
     const userId = await requireAuthUserId(ctx);
     const credit = await ctx.db.query("paymentOrders").withIndex("by_available", q => q.eq("userId", userId).eq("status", "paid").eq("generationId", undefined)).first();
-    const recent = await ctx.db.query("paymentOrders").withIndex("by_user_id_and_status", q => q.eq("userId", userId).eq("status", "paid")).order("desc").first();
-    if (!credit && !(recent?.generationId && !recent.runId)) throw new Error("Pay to unlock a storybook before uploading.");
+    const unfinished = await ctx.db.query("paymentOrders").withIndex("by_unfinished", q => q.eq("userId", userId).eq("status", "paid").eq("runId", undefined)).take(1000);
+    if (!credit && !unfinished.some(order => order.generationId)) throw new Error("Pay to unlock a storybook before uploading.");
     return await ctx.storage.generateUploadUrl();
   }
 });

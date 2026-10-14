@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   type ReactNode
 } from "react";
 import {
@@ -17,6 +18,7 @@ import {
 import { ConvexReactClient, useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { StorybookDraft } from "@/lib/storybook";
 
@@ -44,8 +46,19 @@ export type StorybookPageSummary = {
   updatedAt: number;
 };
 
+export type SavedGeneration = FunctionReturnType<typeof api.generation.listMine>[number];
+export type GenerationDetail = NonNullable<FunctionReturnType<typeof api.generation.getMine>>;
+
 type EvidenceContextValue = {
+  draftStories: SavedGeneration[] | undefined;
+  selectedGeneration: GenerationDetail | null | undefined;
+  openGeneration: (id: string | null) => void;
+  submitGeneration: (input: {generationId: string; inputJson: string; audioStorageId: Id<"_storage">; fileName: string; photoStorageIds?: Id<"_storage">[]}) => Promise<string>;
+  resumeGeneration: (id: string) => Promise<void>;
+  markGenerationPublished: (id: string, runId: string) => Promise<void>;
+  uploadPhoto: (file: File) => Promise<Id<"_storage">>;
   paymentAvailable: boolean | undefined;
+  paymentCredits: number | undefined;
   paymentResumeId: string | null | undefined;
   paymentResponse: string | null | undefined;
   backend: "convex" | "local";
@@ -149,6 +162,13 @@ function ConvexAuthBridge({ children }: { children: ReactNode }) {
 
 function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useConvexAuth();
+  const [selectedDraftId, setSelectedDraftId] = useState<Id<"generationDrafts"> | null>(null);
+  const draftStories = useQuery(api.generation.listMine, isAuthenticated ? {} : "skip");
+  const selectedGeneration = useQuery(api.generation.getMine, isAuthenticated && selectedDraftId ? {draftId: selectedDraftId} : "skip");
+  const submitGeneration = useMutation(api.generation.submit);
+  const resumeGeneration = useMutation(api.generation.resume);
+  const markGenerationPublished = useMutation(api.generation.markPublished);
+  const recordPhotoUpload = useMutation(api.generation.recordPhotoUpload);
   const paymentStatus = useQuery(api.payments.status, isAuthenticated ? {} : "skip");
   const productEvent = useMutation(api.telemetry.productEvent);
   const recordEvent = useCallback((name: ProductEventName, details: ProductEventDetails = {}) => {
@@ -180,7 +200,22 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<EvidenceContextValue>(
     () => ({
       backend: "convex",
+      draftStories,
+      selectedGeneration,
+      openGeneration: id => setSelectedDraftId(id as Id<"generationDrafts"> | null),
+      submitGeneration: async input => { const id = await submitGeneration(input); setSelectedDraftId(id); return id; },
+      resumeGeneration: async id => { setSelectedDraftId(id as Id<"generationDrafts">); await resumeGeneration({draftId: id as Id<"generationDrafts">}); },
+      markGenerationPublished: async (id, runId) => { await markGenerationPublished({draftId: id as Id<"generationDrafts">, runId: runId as Id<"runs">}); },
+      uploadPhoto: async file => {
+        const url = await generateUploadUrl();
+        const response = await fetch(url, {method: "POST", headers: {"Content-Type": file.type}, body: file});
+        if (!response.ok) throw new Error("The family photo could not be saved.");
+        const {storageId} = await response.json() as {storageId: Id<"_storage">};
+        await recordPhotoUpload({storageId, fileName: file.name, contentType: file.type, size: file.size});
+        return storageId;
+      },
       paymentAvailable: paymentStatus?.available,
+      paymentCredits: paymentStatus?.credits,
       paymentResumeId: paymentStatus?.resumeId,
       paymentResponse: paymentStatus?.response,
       recordEvent,
@@ -246,8 +281,10 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
       }
     }),
     [
+      draftStories, selectedGeneration, submitGeneration, resumeGeneration, markGenerationPublished, recordPhotoUpload,
       create,
       paymentStatus?.available,
+      paymentStatus?.credits,
       paymentStatus?.resumeId,
       paymentStatus?.response,
       deletePublishedPage,
@@ -310,7 +347,14 @@ function LocalEvidenceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<EvidenceContextValue>(
     () => ({
       backend: "local",
+      draftStories: [], selectedGeneration: null,
+      openGeneration: () => undefined,
+      submitGeneration: async () => { throw new Error("Sign in to save your story draft."); },
+      resumeGeneration: async () => undefined,
+      markGenerationPublished: async () => undefined,
+      uploadPhoto: async () => { throw new Error("Sign in to save family photos."); },
       paymentAvailable: false,
+      paymentCredits: 0,
       paymentResumeId: null,
       paymentResponse: null,
       recordEvent: () => undefined,

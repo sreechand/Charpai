@@ -1,0 +1,581 @@
+import OpenAI from "openai";
+import type { SourcePassage } from "./storybook-source";
+import type {
+  TranscriptionDiarized,
+  TranscriptionDiarizedSegment
+} from "openai/resources/audio/transcriptions";
+import { NextResponse } from "next/server";
+import { ConvexHttpClient } from "convex/browser";
+import ffmpegStatic from "ffmpeg-static";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import {
+  buildIntakeExtractionPrompt,
+  buildStoryPrompt,
+  demoIntake,
+  demoDraft,
+  mergeIntakeWithExtraction,
+  normalizeDraft,
+  normalizeIntake,
+  type IntakePayload
+} from "@/lib/storybook";
+import { illustrateStorySections } from "@/lib/storybook-illustrations";
+import { buildStorybookImagePrompt } from "@/lib/storybook-image";
+import { maxAudioBytes } from "@/lib/files";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+
+import { GenerationTelemetry, instrumentOpenAI } from "@/lib/generation-telemetry";
+
+import { createGenerationOpenAI } from "@/lib/generation-openai";
+
+export async function generate(parsed: Awaited<ReturnType<typeof readRequest>>, request: Request, authToken: string, telemetry: GenerationTelemetry, startedAt: number) {
+
+  try {
+    const { stage, input, audio, audioStorageId, transcript: suppliedTranscript } = parsed;
+
+    await telemetry.record("request", { stage, input, audio, audioStorageId, transcript: suppliedTranscript, client: { userAgent: request.headers.get("user-agent"), appRelease: process.env.APP_RELEASE || "unversioned" }, sdkMaxRetries: 0 });
+    if (!process.env.OPENAI_API_KEY) {
+      if (stage === "transcribe") {
+        return NextResponse.json({
+          transcript: "Demo transcript placeholder.",
+          model: "demo-mode",
+          elapsedMs: Date.now() - startedAt
+        });
+      }
+      const inferredIntake = demoIntake(input);
+      const draft = demoDraft(inferredIntake);
+      return NextResponse.json({
+        intake: inferredIntake,
+        draft,
+        model: "demo-mode",
+        elapsedMs: Date.now() - startedAt,
+        warning: "OPENAI_API_KEY is missing, so this is a demo draft."
+      });
+    }
+
+    const openai = instrumentOpenAI(createGenerationOpenAI(), telemetry);
+
+    if (stage === "compose") {
+      if (!suppliedTranscript) {
+        return NextResponse.json({ error: "A transcript is required to create the storybook." }, { status: 400 });
+      }
+      return await composeStorybook(openai, input, suppliedTranscript, authToken, startedAt);
+    }
+
+    if (!(audio instanceof File)) {
+      return NextResponse.json(
+        { error: "Upload one audio recording before generating the storybook." },
+        { status: 400 }
+      );
+    }
+
+    if (audio.size > maxAudioBytes) {
+      return NextResponse.json(
+        { error: "The recording is too large. Keep v1 recordings under 100 MB." },
+        { status: 400 }
+      );
+    }
+
+    const transcript = await transcribe(openai, audio, input, telemetry);
+    if (stage === "transcribe") {
+      return NextResponse.json({
+        transcript,
+        model: "gpt-4o-transcribe-diarize",
+        elapsedMs: Date.now() - startedAt
+      });
+    }
+
+    return await composeStorybook(openai, input, transcript, authToken, startedAt);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Something failed while generating the storybook.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+async function composeStorybook(
+  openai: OpenAI,
+  input: IntakePayload,
+  transcript: string,
+  authToken: string | null,
+  startedAt: number
+) {
+    const inferredIntake = await extractIntake(openai, input, transcript);
+    const generatedDraft = await generateDraft(openai, inferredIntake, transcript);
+    const draft = normalizeDraft({ ...generatedDraft, transcript }, inferredIntake);
+    let warning = "";
+
+    warning = await illustrateStorySections(draft, section => generateStorybookIllustration(openai, draft, authToken, section));
+
+    return NextResponse.json({
+      intake: inferredIntake,
+      draft,
+      model: process.env.OPENAI_TEXT_MODEL || "gpt-5-mini",
+      elapsedMs: Date.now() - startedAt,
+      warning
+    });
+}
+
+export async function generateStorybookIllustration(
+  openai: OpenAI,
+  draft: ReturnType<typeof normalizeDraft>,
+  authToken: string | null,
+  section: import("@/lib/storybook").StorySection,
+  storeImage?: (bytes: Buffer, model: string) => Promise<{ storageId: string; url: string }>
+) {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!storeImage && (!convexUrl || !authToken)) {
+    throw new Error("Sign in again to save the generated illustration.");
+  }
+
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare";
+  const result = await openai.images.generate({
+    model,
+    prompt: buildStorybookImagePrompt(draft, section),
+    size: "1024x1024",
+    quality: "medium",
+    background: "opaque",
+    output_format: "webp",
+    n: 1
+  });
+  const encodedImage = result.data?.[0]?.b64_json;
+  if (!encodedImage) {
+    throw new Error("The image model returned no artwork.");
+  }
+
+  const imageBytes = Buffer.from(encodedImage, "base64");
+  if (storeImage) return await storeImage(imageBytes, model);
+  const convex = new ConvexHttpClient(convexUrl!);
+  convex.setAuth(authToken!);
+  const uploadUrl = await convex.mutation(api.files.generateUploadUrl, {});
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "POST",
+    headers: { "Content-Type": "image/webp" },
+    body: imageBytes
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error("The generated illustration could not be stored.");
+  }
+
+  const upload = (await uploadResponse.json()) as { storageId?: Id<"_storage"> };
+  if (!upload.storageId) {
+    throw new Error("Image storage did not return an id.");
+  }
+
+  await convex.mutation(api.files.recordStorybookImage, {
+    storageId: upload.storageId,
+    contentType: "image/webp",
+    size: imageBytes.byteLength,
+    model
+  });
+  const url = await convex.query(api.files.getStorybookImageUrl, {
+    storageId: upload.storageId
+  });
+  if (!url) {
+    throw new Error("The stored illustration could not be loaded.");
+  }
+
+  return { storageId: String(upload.storageId), url };
+}
+
+function readIntake(formData: FormData): IntakePayload {
+  return normalizeIntake({
+    buyerName: getText(formData, "buyerName"),
+    email: getText(formData, "email"),
+    elderName: getText(formData, "elderName"),
+    relationship: getText(formData, "relationship"),
+    originPlace: getText(formData, "originPlace"),
+    languageMix: getText(formData, "languageMix"),
+    preserveWords: getText(formData, "preserveWords"),
+    dedication: getText(formData, "dedication"),
+    notes: getText(formData, "notes")
+  });
+}
+
+function getText(formData: FormData, key: keyof IntakePayload) {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export async function readRequest(
+  request: Request,
+  authToken: string | null
+): Promise<{
+  stage: "full" | "transcribe" | "compose";
+  input: IntakePayload;
+  audio: File | null;
+  audioStorageId?: Id<"_storage">;
+  transcript: string;
+}> {
+  const contentType = request.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const payload = (await request.json()) as {
+      input?: Partial<IntakePayload>;
+      audioStorageId?: Id<"_storage">;
+      stage?: unknown;
+      transcript?: unknown;
+    };
+
+    return {
+      stage: readGenerationStage(payload.stage),
+      input: readJsonIntake(payload.input || {}),
+      audioStorageId: payload.audioStorageId,
+      audio: payload.audioStorageId ? await readStoredAudio(payload.audioStorageId, authToken) : null,
+      transcript: typeof payload.transcript === "string" ? payload.transcript.trim() : ""
+    };
+  }
+
+  const formData = await request.formData();
+  const audio = formData.get("audio");
+  return {
+    stage: readGenerationStage(formData.get("stage")),
+    input: readIntake(formData),
+    audio: audio instanceof File ? audio : null,
+    transcript: ""
+  };
+}
+
+function readGenerationStage(value: unknown): "full" | "transcribe" | "compose" {
+  return value === "transcribe" || value === "compose" ? value : "full";
+}
+
+function readJsonIntake(input: Partial<IntakePayload>): IntakePayload {
+  return normalizeIntake(input);
+}
+
+export function readBearerToken(authorization: string | null) {
+  if (!authorization) {
+    return null;
+  }
+
+  const [scheme, token] = authorization.split(" ");
+  return scheme?.toLowerCase() === "bearer" && token ? token : null;
+}
+
+async function readStoredAudio(storageId: Id<"_storage">, authToken: string | null) {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl) {
+    throw new Error("Convex is not configured for stored audio processing.");
+  }
+
+  if (!authToken) {
+    throw new Error("Sign in again before generating the storybook.");
+  }
+
+  const convex = new ConvexHttpClient(convexUrl);
+  convex.setAuth(authToken);
+  const fileUrl = await convex.query(api.files.getUrl, { storageId });
+  if (!fileUrl) {
+    throw new Error("Uploaded audio could not be found.");
+  }
+
+  const response = await fetch(fileUrl);
+  if (!response.ok) {
+    throw new Error("Uploaded audio could not be loaded for transcription.");
+  }
+
+  const blob = await response.blob();
+  return new File([blob], "interview-audio", {
+    type: blob.type || response.headers.get("content-type") || "audio/mpeg"
+  });
+}
+
+async function transcribe(openai: OpenAI, audio: File, input: IntakePayload, telemetry: GenerationTelemetry) {
+  const audioSegments = await telemetry.trace("audio_preparation", { audio }, () => prepareAudioForTranscription(audio));
+  const transcripts = await Promise.all(
+    audioSegments.map(async (segment, index) => {
+      try {
+        return await transcribeSegment(openai, segment, input);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const status = error && typeof error === "object" && "status" in error ? error.status : null;
+        if (status === 413 || message.includes("25 MB")) {
+          throw new Error(
+            `Audio segment ${index + 1} exceeded the transcription upload limit after preparation.`
+          );
+        }
+        throw error;
+      }
+    })
+  );
+
+  return transcripts.filter(Boolean).join("\n\n");
+}
+
+export async function transcribeTimedSegment(openai: OpenAI, audio: File, input: IntakePayload, offset = 0, partIndex = 0): Promise<SourcePassage[]> {
+  // The current SDK response overload omits diarized_json even though its
+  // runtime type is exported and the API supports it.
+  const transcription = (await openai.audio.transcriptions.create({
+    file: audio,
+    model: "gpt-4o-transcribe-diarize",
+    response_format: "diarized_json",
+    chunking_strategy: "auto"
+  })) as unknown as TranscriptionDiarized;
+
+  const segments = transcription.segments.filter((segment) => segment.text.trim());
+  if (!segments.length) throw new Error("No timed speech was returned. Your original recording is saved.");
+  const speakers = new Set(segments.map(segment => segment.speaker));
+  const narrator = speakers.size === 1 ? segments[0].speaker : await identifyIntervieweeSpeaker(openai, segments, input);
+  return segments.map((segment, i) => {
+    if (!Number.isFinite(segment.start) || !Number.isFinite(segment.end) || segment.start < 0 || segment.end < segment.start) throw new Error("Recording timestamps could not be verified. Retry transcription.");
+    return {id: `p-${partIndex}-${i}`, text: segment.text, speaker: `${partIndex}:${segment.speaker}`, start: offset + segment.start, end: offset + segment.end, narrator: segment.speaker === narrator};
+  });
+}
+
+export async function transcribeSegment(openai: OpenAI, audio: File, input: IntakePayload) {
+  return (await transcribeTimedSegment(openai, audio, input)).map(p => p.text).join("\n");
+}
+
+async function identifyIntervieweeSpeaker(
+  openai: OpenAI,
+  segments: TranscriptionDiarizedSegment[],
+  input: IntakePayload
+) {
+  const speakers = Array.from(new Set(segments.map((segment) => segment.speaker)));
+  const labeledTranscript = segments
+    .map(
+      (segment) =>
+        `[${segment.speaker} ${formatTimestamp(segment.start)}-${formatTimestamp(segment.end)}] ${segment.text.trim()}`
+    )
+    .join("\n");
+  const model = process.env.OPENAI_TEXT_MODEL || "gpt-5-mini";
+  const response = await openai.responses.create({
+    model,
+    instructions: [
+      "Identify the interviewee in a speaker-diarized family-history interview.",
+      "The interviewee is the person answering questions and sharing their own memories; the interviewer asks or prompts.",
+      "Return only JSON in the form {\"speaker\":\"A\"}, using exactly one speaker label present in the transcript.",
+      "Do not select a speaker merely because they speak first."
+    ].join(" "),
+    input: [
+      `Expected interviewee name or family title: ${input.elderName || "not provided"}`,
+      `Expected relationship: ${input.relationship || "not provided"}`,
+      `Available speaker labels: ${speakers.join(", ")}`,
+      "Transcript:",
+      labeledTranscript
+    ].join("\n")
+  });
+
+  if (!response.output_text) {
+    throw new Error("The interviewee could not be identified from the recording.");
+  }
+
+  const result = JSON.parse(extractJson(response.output_text)) as { speaker?: unknown };
+  if (typeof result.speaker !== "string" || !speakers.includes(result.speaker)) {
+    throw new Error("The interviewee could not be identified reliably from the recording.");
+  }
+
+  return result.speaker;
+}
+
+function formatTimestamp(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
+}
+
+export async function prepareAudioForTranscription(audio: File) {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "storybook-audio-"));
+  const inputPath = path.join(tempDir, `source-${randomUUID()}${extensionFor(audio)}`);
+  const outputPattern = path.join(tempDir, "transcription-%03d.mp3");
+  const manifestPath = path.join(tempDir, "parts.csv");
+
+  try {
+    await writeFile(inputPath, Buffer.from(await audio.arrayBuffer()));
+    await runFfmpeg([
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      inputPath,
+      "-map",
+      "0:a:0",
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "32k",
+      "-f",
+      "segment",
+      "-segment_time",
+      "300",
+      "-segment_list",
+      manifestPath,
+      "-reset_timestamps",
+      "1",
+      outputPattern
+    ]);
+
+    const segmentNames = (await readdir(tempDir))
+      .filter((name) => /^transcription-\d{3}\.mp3$/.test(name))
+      .sort();
+    if (!segmentNames.length) {
+      throw new Error("Audio conversion produced no playable segments.");
+    }
+
+    const boundaries = (await readFile(manifestPath, "utf8")).trim().split("\n").map(line => Number(line.split(",").at(-2)));
+    return await Promise.all(
+      segmentNames.map(async (segmentName, index) => {
+        const segment = await readFile(path.join(tempDir, segmentName));
+        if (segment.byteLength > 20 * 1000 * 1000) {
+          throw new Error(`Prepared audio segment ${index + 1} is unexpectedly large.`);
+        }
+        const file = new File(
+          [segment],
+          `${path.parse(audio.name || "interview-audio").name}-part-${index + 1}.mp3`,
+          { type: "audio/mpeg" }
+        );
+        return Object.assign(file, { startSeconds: boundaries[index] });
+      })
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown audio conversion failure.";
+    throw new Error(`Audio preparation failed before transcription. ${detail}`);
+  } finally {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+}
+
+function extensionFor(file: File) {
+  const extension = path.extname(file.name || "");
+  if (extension && /^[a-z0-9.]+$/i.test(extension)) {
+    return extension;
+  }
+
+  if (file.type.includes("wav")) {
+    return ".wav";
+  }
+  if (file.type.includes("mpeg") || file.type.includes("mp3")) {
+    return ".mp3";
+  }
+  if (file.type.includes("mp4")) {
+    return ".mp4";
+  }
+  if (file.type.includes("webm")) {
+    return ".webm";
+  }
+  if (file.type.includes("flac")) {
+    return ".flac";
+  }
+  return ".audio";
+}
+
+async function runFfmpeg(args: string[]) {
+  const candidates = await getFfmpegCandidates();
+  const failures: string[] = [];
+
+  for (const executable of candidates) {
+    const stderr: string[] = [];
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(/* turbopackIgnore: true */ executable, args, {
+          stdio: ["ignore", "ignore", "pipe"]
+        });
+
+        child.stderr.setEncoding("utf8");
+        child.stderr.on("data", (chunk: string) => stderr.push(chunk));
+        child.on("error", reject);
+        child.on("close", (code) => {
+          if (code === 0) {
+            resolve();
+            return;
+          }
+          reject(new Error(stderr.join("").trim() || `ffmpeg exited with code ${code}.`));
+        });
+      });
+      return;
+    } catch (error) {
+      failures.push(`${executable}: ${error instanceof Error ? error.message : "failed"}`);
+    }
+  }
+
+  throw new Error(`No usable ffmpeg executable found. Tried ${failures.join(" | ")}.`);
+}
+
+async function getFfmpegCandidates() {
+  const candidates = [
+    process.env.FFMPEG_PATH,
+    await existingExecutable(ffmpegStatic),
+    "ffmpeg",
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/opt/homebrew/bin/ffmpeg"
+  ];
+
+  return Array.from(new Set(candidates.filter((candidate): candidate is string => Boolean(candidate))));
+}
+
+async function existingExecutable(candidate: string | null) {
+  if (!candidate) {
+    return null;
+  }
+
+  try {
+    await access(candidate);
+    return candidate;
+  } catch {
+    return null;
+  }
+}
+
+export async function extractIntake(openai: OpenAI, input: IntakePayload, transcript: string) {
+  const model = process.env.OPENAI_TEXT_MODEL || "gpt-5-mini";
+  const response = await openai.responses.create({
+    model,
+    instructions:
+      "You extract structured storybook intake fields from family-history transcripts. Return only valid JSON.",
+    input: buildIntakeExtractionPrompt(input, transcript)
+  });
+
+  const text = response.output_text;
+  if (!text) {
+    return normalizeIntake(input);
+  }
+
+  return mergeIntakeWithExtraction(input, JSON.parse(extractJson(text)));
+}
+
+export async function generateDraft(openai: OpenAI, input: IntakePayload, transcript: string) {
+  const model = process.env.OPENAI_TEXT_MODEL || "gpt-5-mini";
+  const response = await openai.responses.create({
+    model,
+    instructions:
+      "You are a careful family-history editor. You turn interview transcripts into truthful, complete storybooks. The transcript is the source of truth for output language: an English transcript must produce an English story. Return only valid JSON.",
+    input: buildStoryPrompt(input, transcript)
+  });
+
+  const text = response.output_text;
+  if (!text) {
+    throw new Error("The story model returned an empty result.");
+  }
+
+  return JSON.parse(extractJson(text));
+}
+
+function extractJson(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first === -1 || last === -1 || last <= first) {
+    throw new Error("The story model did not return valid JSON.");
+  }
+
+  return trimmed.slice(first, last + 1);
+}

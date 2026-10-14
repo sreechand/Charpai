@@ -1,0 +1,46 @@
+// Development-only real Razorpay test checkout. Never uses live keys or real money.
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { ConvexHttpClient } from 'convex/browser';
+import { api } from '../convex/_generated/api.js';
+const base='http://localhost:3017';
+assert.match(await readFile('.env.local','utf8'),/NEXT_PUBLIC_CONVEX_URL=https:\/\/qualified-bullfrog-386\.convex\.cloud/);
+const browser=await chromium.launch();
+try {
+ const context=await browser.newContext();const page=await context.newPage();
+ const email=`mock-payment-${randomUUID()}@example.invalid`,password=randomUUID()+randomUUID();
+ await page.goto(base+'/app/login');
+ await page.getByRole('button',{name:'Sign up',exact:true}).click();
+ await page.getByLabel('Email',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'Create account',exact:true}).click();
+ await page.getByRole('button',{name:'Pay ₹200.00',exact:true}).waitFor();
+ const client=new ConvexHttpClient('https://qualified-bullfrog-386.convex.cloud');
+ const login=await client.action(api.auth.signIn,{provider:'password',params:{flow:'signIn',email,password}});client.setAuth(login.tokens.token);
+ assert.equal((await client.query(api.payments.status,{})).credits,0);
+ const details=await fetch(base+'/api/create-order',{headers:{Authorization:`Bearer ${login.tokens.token}`}});
+ assert.deepEqual(await details.json(),{amount:20000,currency:'INR',testMode:true},'Refuse any checkout that is not ₹200 Test mode');
+ await page.getByText(/Storybook payment.*Test mode/i).waitFor();
+ const orderPromise=page.waitForResponse(r=>r.url()===base+'/api/create-order'&&r.request().method()==='POST');
+ await page.getByRole('button',{name:'Pay ₹200.00',exact:true}).click();
+ const order=await(await orderPromise).json();assert.match(order.key_id,/^rzp_test_/);assert.equal(order.amount,20000);
+ const checkout=page.frameLocator('iframe.razorpay-checkout-frame');
+ await checkout.getByRole('button',{name:'Continue',exact:true}).waitFor();
+ await checkout.locator('input[type="tel"]').fill('9123456789');
+ if(await checkout.getByRole('button',{name:'Continue',exact:true}).count())await checkout.getByRole('button',{name:'Continue',exact:true}).click({timeout:5000});
+ await checkout.getByText('Netbanking',{exact:true}).click({timeout:10000});
+ const bankPromise=context.waitForEvent('page');await checkout.getByText('HDFC Bank',{exact:true}).first().click();
+ const bank=await bankPromise;await bank.getByRole('button',{name:'Success',exact:true}).click();
+ await page.getByText('4 generation credits remaining.',{exact:false}).waitFor({timeout:45000});
+ assert.equal((await client.query(api.payments.status,{})).credits,4);
+ await page.reload();await page.getByText('4 generation credits remaining.',{exact:false}).waitFor();
+ await page.getByRole('button',{name:'Sign out',exact:true}).click();
+ await page.getByLabel('Email',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.getByText('4 generation credits remaining.',{exact:false}).waitFor();
+ assert.equal((await client.query(api.payments.status,{})).credits,4);
+ assert.equal(await page.getByRole('button',{name:'Start recording',exact:true}).isEnabled(),true);
+ await page.screenshot({path:'/private/tmp/charpai-mock-payment-four-credits.png',fullPage:true});
+ console.log('PASS: fresh signup → ₹200 Razorpay mock netbanking payment → exactly four credits → reload and sign-out/sign-in retain four credits → recording unlocked. No real money or generation credit used.');
+} finally {await browser.close();}

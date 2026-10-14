@@ -9,9 +9,9 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   let creates = 0, verifies = 0;
   await page.route('**/api/create-order', route => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { amount: 100, currency: 'INR', testMode: true } });
+    if (route.request().method() === 'GET') return route.fulfill({ json: { amount: 20000, currency: 'INR', testMode: true } });
     creates++;
-    return route.fulfill({ json: { order_id: 'order_browser_test', amount: 100, currency: 'INR', key_id: 'rzp_test_mock' } });
+    return route.fulfill({ json: { order_id: 'order_browser_test', amount: 20000, currency: 'INR', key_id: 'rzp_test_mock' } });
   });
   await page.route('**/api/verify-payment', route => {
     verifies++;
@@ -30,7 +30,7 @@ try {
   await page.getByLabel('Email', { exact: true }).fill(`payment-browser-${randomUUID()}@example.invalid`);
   await page.getByLabel('Password', { exact: true }).fill(randomUUID() + randomUUID());
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
-  const pay = page.getByRole('button', { name: 'Pay ₹1.00', exact: true });
+  const pay = page.getByRole('button', { name: 'Pay ₹200.00', exact: true });
   await pay.waitFor();
   await pay.click();
   await page.waitForFunction(() => window.mockCheckoutOpened === 1);
@@ -45,7 +45,7 @@ try {
   await page.evaluate(() => window.mockCheckoutOptions.handler({ razorpay_order_id: 'order_browser_test', razorpay_payment_id: 'pay_browser_test', razorpay_signature: 'mock-signature' }));
   await page.getByRole('button', { name: 'Retry payment verification' }).waitFor();
   await page.getByRole('button', { name: 'Retry payment verification' }).click();
-  await page.getByText('Payment verified. Your payment has been saved.').waitFor();
+  await page.getByText('Payment verified. Your 4 generation credits are ready.').waitFor();
   assert.equal(creates, 1, 'verification retry must not charge again');
   assert.equal(verifies, 2);
   assert.deepEqual(errors, []);

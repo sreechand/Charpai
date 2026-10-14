@@ -149,7 +149,7 @@ Thirty-minute check, no code:
 4. Ask them to choose a real existing recording or arrange a conversation with a specific person at a specific time.
 5. Record whether they take that next step, what stops them, and whether they would pay before seeing their own draft.
 
-What happened: no customer check is documented in the notes reviewed. The fictional-audio development test proves the creation flow can work; it does not prove demand, willingness to pay, or accuracy on real family interviews.
+What happened: on 14 October 2026, the maker reported that the first customer has committed to trying Charpai tonight at 9pm (Asia/Kolkata). This is an initial commitment from a real customer; session completion, payment, and the resulting book have not yet been reported. After the session, record whether they supplied a recording, reached a draft, corrected and saved it, shared it, and where they needed help. The earlier fictional-audio test proves the development flow can work; it does not establish accuracy on real family interviews or repeat demand.
 
 ## 7. Milestones
 

@@ -1,5 +1,11 @@
 # Product planning
 
+## 2026-10-14
+
+- User reports their first customer is scheduled to try Charpai tonight at 9pm (Asia/Kolkata). Updated PRODUCT.md to replace the outdated absence of a customer check with this reported commitment.
+- Session outcome and payment are not yet known. Do not treat the scheduled session as a completed or paid journey.
+- Next: check the exact customer journey before the session; afterwards record completion, help needed, and whether the customer saves/shares the book.
+
 ## 2026-10-10
 
 - User supplied a PRODUCT.md template covering the job, switching forces, core flow, onboarding, v1 scope, riskiest assumption, and milestones.

@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, env } from "./_generated/server";
 
 import schema from "./schema";
+import { queueNotification } from "./notifications";
 
 
 
@@ -12,7 +13,7 @@ export const identity = internalQuery({
 });
 
 export const saveOrder = internalMutation({
-  args: { userId: v.id("users"), orderId: v.string(), amount: v.number(), currency: v.string() },
+  args: { userId: v.id("users"), orderId: v.string(), amount: v.number(), currency: v.string(), creditsPerPurchase: v.optional(v.number()) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("paymentOrders").withIndex("by_order_id", q => q.eq("orderId", args.orderId)).unique();
@@ -36,6 +37,14 @@ export const ownedOrder = internalQuery({
   }
 });
 
+// Recover captured payments if the browser closed before its success callback.
+export const pendingOrders = internalQuery({
+  args: { userId: v.id("users") }, returns: v.array(schema.doc("paymentOrders")),
+  handler: async (ctx, args) => await ctx.db.query("paymentOrders")
+    .withIndex("by_user_id_and_status", q => q.eq("userId", args.userId).eq("status", "created"))
+    .order("desc").take(10)
+});
+
 // Internal only: browsers cannot grant themselves payment access.
 export const markPaid = internalMutation({
   args: { userId: v.id("users"), orderId: v.string(), paymentId: v.string() }, returns: v.null(),
@@ -46,20 +55,30 @@ export const markPaid = internalMutation({
       if (order.paymentId !== args.paymentId) throw new ConvexError({ status: 400, message: "Order already has a different payment." });
       return null;
     }
-    await ctx.db.patch(order._id, { status: "paid", paymentId: args.paymentId, paidAt: Date.now() });
+    const paidAt = Date.now();
+    await ctx.db.patch(order._id, { status: "paid", paymentId: args.paymentId, paidAt });
+    // The purchased order supplies credit one; the remaining credits share its real payment.
+    // This mutation is atomic and duplicate verification returns above before granting again.
+    for (let credit = 2; credit <= (order.creditsPerPurchase || 1); credit++) {
+      await ctx.db.insert("paymentOrders", {
+        userId: order.userId, orderId: `${order.orderId}:credit:${credit}`,
+        parentOrderId: order.orderId, amount: 0, currency: order.currency,
+        status: "paid", paymentId: args.paymentId, createdAt: paidAt, paidAt
+      });
+    }
     return null;
   }
 });
 
 export const status = query({
-  args: {}, returns: v.object({ available: v.boolean(), resumeId: v.union(v.string(), v.null()), response: v.union(v.string(), v.null()) }),
+  args: {}, returns: v.object({ available: v.boolean(), credits: v.number(), resumeId: v.union(v.string(), v.null()), response: v.union(v.string(), v.null()) }),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return { available: false, resumeId: null, response: null };
-    const credit = await ctx.db.query("paymentOrders").withIndex("by_available", q => q.eq("userId", userId).eq("status", "paid").eq("generationId", undefined)).first();
-    const recent = await ctx.db.query("paymentOrders").withIndex("by_user_id_and_status", q => q.eq("userId", userId).eq("status", "paid")).order("desc").first();
-    const active = recent?.generationId && !recent.runId ? recent : null;
-    return { available: Boolean(credit), resumeId: active?.generationId || null, response: active?.composeResponse || (active?.inputJson ? JSON.stringify({ intake: JSON.parse(active.inputJson) }) : null) };
+    if (!userId) return { available: false, credits: 0, resumeId: null, response: null };
+    const credits = await ctx.db.query("paymentOrders").withIndex("by_available", q => q.eq("userId", userId).eq("status", "paid").eq("generationId", undefined)).take(1000);
+    const unfinished = await ctx.db.query("paymentOrders").withIndex("by_unfinished", q => q.eq("userId", userId).eq("status", "paid").eq("runId", undefined)).order("desc").take(1000);
+    const active = unfinished.find(order => order.generationId);
+    return { available: credits.length > 0, credits: credits.length, resumeId: active?.generationId || null, response: active?.composeResponse || (active?.inputJson ? JSON.stringify({ intake: JSON.parse(active.inputJson) }) : null) };
   }
 });
 
@@ -93,6 +112,7 @@ export const beginGeneration = mutation({
     if (args.stage === "compose" && !order.transcribeResponse) throw new Error("Finish transcription first.");
     if (order.lock && Date.now() - order.lock.startedAt < 360000) throw new ConvexError({ status: 409, message: "Your storybook is already being prepared. Please wait." });
     await ctx.db.patch(order._id, { [hashKey]: args.payloadHash, lock: { token: args.token, stage: args.stage, startedAt: Date.now() } });
+    if (args.stage !== "transcribe") await queueNotification(ctx, { key: `generation_started:${userId}:${args.generationId}`, kind: "generation_started", userId, generationId: args.generationId });
     return { response: null };
   }
 });
@@ -107,6 +127,12 @@ export const finishGeneration = mutation({
     if (!order || order.lock?.token !== args.token) throw new Error("Generation attempt not found.");
     const responseKey = order.lock.stage === "transcribe" ? "transcribeResponse" : "composeResponse";
     await ctx.db.patch(order._id, { lock: undefined, ...(args.response ? { [responseKey]: args.response } : {}) });
+    if (order.lock.stage !== "transcribe") {
+      let title: string | undefined;
+      if (args.response) { try { const result = JSON.parse(args.response); if (typeof result.draft?.title === "string") title = result.draft.title; } catch { /* Email metadata is optional. */ } }
+      const kind = args.response ? "generation_ready" : "generation_failed";
+      await queueNotification(ctx, { key: `${kind}:${userId}:${args.generationId}`, kind, userId, generationId: args.generationId, title });
+    }
     return null;
   }
 });

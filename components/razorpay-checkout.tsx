@@ -68,7 +68,7 @@ export function RazorpayCheckout({ disabled = false }: { disabled?: boolean }) {
       setPending(null);
       setConfirmed(true);
       order.current = null;
-      setMessage("Payment verified. You can start your storybook.");
+      setMessage("Payment verified. Your 4 generation credits are ready.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Payment could not be verified. Retry verification before paying again.");
     } finally { verifying.current = false; busyRef.current = false; setBusy(false); }
@@ -89,7 +89,7 @@ export function RazorpayCheckout({ disabled = false }: { disabled?: boolean }) {
       }
       const created = order.current!;
       const checkout = new window.Razorpay!({ key: created.key_id, amount: created.amount, currency: created.currency,
-        order_id: created.order_id, name: "Charpai", description: "One family storybook with ongoing access",
+        order_id: created.order_id, name: "Charpai", description: "One family storybook · 4 generation credits",
         theme: { color: "#79452e" }, handler: payment => { void verify(payment); },
         modal: { ondismiss: () => {
           if (verifying.current) return;
@@ -111,7 +111,7 @@ export function RazorpayCheckout({ disabled = false }: { disabled?: boolean }) {
     <div className="field-section-heading payment-panel">
       <div>
         <p className="eyebrow">Storybook payment{details?.testMode ? " · Test mode" : ""}</p>
-        <p>{evidence.paymentAvailable || confirmed ? "Payment verified." : price ? `Pay ${price} to create one storybook and keep access to it.` : "Checkout will be available once the price is set."}</p>
+        <p>{evidence.paymentAvailable || confirmed ? "Payment verified." : price ? `Pay ${price} for 4 generation credits to make your storybook.` : "Payments are being set up. Please try again shortly."}</p>
         {pending ? (
           <button className="primary-button" type="button" disabled={busy || disabled} onClick={() => { void verify(pending); }}>
             {busy ? "Verifying…" : "Retry payment verification"}

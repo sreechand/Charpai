@@ -1,11 +1,7 @@
 import { Suspense } from "react";
 import { StorybookApp } from "@/components/storybook-app";
-import { connection } from "next/server";
-import { redirect } from "next/navigation";
-import { isCharpaiLaunched } from "@/lib/launch";
 
-export default async function StorybookWorkspace() {
-  await connection();
-  if (!isCharpaiLaunched()) redirect("/#start");
+export default function StorybookWorkspace() {
+  // Homepage launch visibility is separate from authenticated app access.
   return <Suspense fallback={null}><StorybookApp /></Suspense>;
 }

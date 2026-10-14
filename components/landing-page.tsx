@@ -7,8 +7,8 @@ import { LaunchUpdates } from "./launch-updates";
 const steps = [{ id: "upload", label: "Recording" }, { id: "details", label: "Family details" }, { id: "spread", label: "First spread" }] as const;
 const barHeights = [18,34,52,40,26,60,72,44,30,56,66,38,22,48,70,58,32,20,44,62,50,28,36,64,54,30,24,46,68,40,26,52,60,34,22,42,56,30,18,26];
 
-export function LandingPage({ launched }: { launched: boolean }) {
-  const ctaHref = launched ? "/app" : "#start";
+export function LandingPage({ launched, appUrl = "/app" }: { launched: boolean; appUrl?: string }) {
+  const ctaHref = launched ? appUrl : "#start";
   const ctaLabel = launched ? "Start a storybook" : "Get launch updates";
   const [step, setStep] = useState<"upload" | "details" | "spread">("upload");
   const [highlightedStep, setHighlightedStep] = useState<"upload" | "details" | "spread">("upload");
@@ -39,7 +39,7 @@ export function LandingPage({ launched }: { launched: boolean }) {
 <a className="navlink" href="#questions-to-ask">What to ask</a>
 <a className="navlink" href="#maker">The maker</a>
 <a className="navlink" href="#faq">Questions</a>
-{launched && <a className="navlink" href="/app">Log in</a>}
+{launched && <a className="navlink" href={appUrl}>Log in</a>}
 <a className="btn btn-primary" href={ctaHref}>{ctaLabel}</a>
 </nav>
 </header>
@@ -241,7 +241,7 @@ export function LandingPage({ launched }: { launched: boolean }) {
 <h2 style={{"margin": "0", "fontFamily": "'Source Serif 4', serif", "fontWeight": "700", "fontSize": "clamp(44px, 5.5vw, 76px)", "lineHeight": "1"}}>Someone in your family has a story only they can tell.</h2>
 <div style={{"display": "flex", "flexDirection": "column", "gap": "20px", "alignItems": "start"}}>
 <p style={{"margin": "0", "fontSize": "20px", "color": "#F8EAE3"}}>{launched ? "Take the nostalgia trip this week. Turn it into a storybook tonight." : "Charpai launches on October 15. Leave your email and we’ll let you know when it’s ready."}</p>
-{launched ? <a className="btn" href="/app" style={{"background": "#F2EEE3", "color": "#1F1A14"}}>Start a storybook</a> : <LaunchUpdates />}
+{launched ? <a className="btn" href={appUrl} style={{"background": "#F2EEE3", "color": "#1F1A14"}}>Start a storybook</a> : <LaunchUpdates />}
 </div>
 </div>
 </section>

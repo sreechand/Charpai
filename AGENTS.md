@@ -41,3 +41,7 @@ These instructions apply to this repository (`agara` / Charpai), not other build
 - Before release, verify the linked project and production backend, run appropriate checks, and use production Convex settings for both website build and runtime. Never upload local `.env` files, project notes, sample exports, or the removed desk photo; preserve `.vercelignore`.
 - Verify the actual public domain after release, including the homepage, the current login/launch behavior and update signup when active. Report what was tested and record the deployment in project notes.
 - Concrete publishing commands and verification details: `docs/PUBLISHING.md`.
+
+### Additional here.now homepage
+
+The user explicitly authorized publishing the homepage to `https://charpai.stories.here.now/` in the existing Charpai `stories` workspace. This is an approved additional homepage destination, not a migration of the authenticated app or backend. Its Site slug is `bronze-glacier-wpz9`; use `npm run build:landing` and `node scripts/publish-herenow-landing.mjs` for requested updates. Preserve the exact `charpai` label, public access, existing story labels, and the user's launch flag. Signup capture proxies to the existing production website and Convex database; after launch, login/signup links lead to the existing `/app`. Read `docs/PUBLISHING.md` for state/version checks and both destinations. Do not upload `.herenow` state or credentials. A here.now publish does not automatically publish Vercel changes.

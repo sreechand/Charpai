@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import { queueNotification } from "./notifications";
 
 export const add = mutation({
   args: {
@@ -23,12 +24,14 @@ export const add = mutation({
     const existing = await ctx.db.query("waitlist").withIndex("by_email", q => q.eq("email", email)).first();
     // Do not let an anonymous duplicate overwrite someone's contact details.
     if (existing) return existing._id;
-    return await ctx.db.insert("waitlist", {
+    const waitlistId = await ctx.db.insert("waitlist", {
       ...args,
       email,
       phone,
       consentAt: Date.now(),
       createdAt: Date.now()
     });
+    await queueNotification(ctx, { key: `waitlist_signup:${waitlistId}`, kind: "waitlist_signup", waitlistId });
+    return waitlistId;
   }
 });

@@ -5,7 +5,7 @@ const eslintConfig = [
   ...nextVitals,
   ...nextTs,
   {
-    ignores: [".next/**", "node_modules/**", "convex/_generated/**"]
+    ignores: [".next/**", "node_modules/**", "convex/_generated/**", "dist/**"]
   }
 ];
 

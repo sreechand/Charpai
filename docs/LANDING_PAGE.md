@@ -194,3 +194,15 @@ Checkpoint privacy check: the removed original desk photograph contains GPS meta
 ## Workdesk metadata cleanup — 2026-10-13
 
 The user confirmed they have the original and authorized removing metadata from the local project copy. Removed metadata using a lossless JPEG transform, baking the original orientation into the pixels so the photograph stays upright. Verified that EXIF, XMP, IPTC and the orientation tag are absent, with dimensions unchanged at 2992 × 2992. The original in Downloads was not modified. The cleaned project photo is now included in the requested GitHub checkpoint; it remains excluded from website deployments and is not displayed on the page. This supersedes the earlier local-only exclusion.
+
+## Additional here.now homepage — 2026-10-13
+
+Published the current homepage permanently at `https://charpai.stories.here.now/`, with the user's explicit approval. It reuses the same React homepage, including the pending “Immortalize” wording, recording sentence, gentle crossfade, card-first button highlight, and social link. The update form on this address was tested through its proxy and confirmed to save once in the existing production Convex database. Artwork, logo, fonts and favicon are included; the removed desk photo is not.
+
+The original Vercel homepage was not republished by this action. Existing story subdomains remain unchanged. Repeatable build/publish commands, label/version state and verified limitations are in `docs/PUBLISHING.md`. Next: review the new homepage. Visual browser automation remained unavailable; live HTTP/assets, signup/database, lint and build checks passed.
+## Link preview image — 2026-10-14
+
+- User supplied `charpaiv8_underbed.png` for the image shown when sharing a website link. Copied it unchanged to `public/landing/charpai-link-preview.png` (601 × 161 PNG with transparency); header/footer logos remain as before.
+- Added Open Graph and Twitter image settings to the Next app's root metadata, with absolute URLs based on `https://charpai.sreechand.pm`. Added equivalent sharing tags and the asset to the standalone homepage builder for `https://charpai.stories.here.now/`.
+- Verified: both builds pass; changed-file lint passes; all copied image bytes match the supplied image; standalone HTML includes the expected image tags; running Next homepage exposes the tags in its head to a sharing crawler and serves the expected PNG. Playwright loaded the image and its screenshot was visually inspected.
+- No publication or commit performed. Actual previews in messaging/social apps have not been tested. Next: publish the updated homepages when requested, then check a newly shared link.

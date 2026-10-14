@@ -1653,20 +1653,16 @@ textarea {
 .folio-stage.folio-closed { max-width: 640px; }
 .folio-page { position: relative; box-sizing: border-box; flex: 1 1 0; min-width: 0; background: var(--folio-paper); padding: 48px; color: var(--folio-ink); font-family: Georgia, "Times New Roman", serif; }
 .folio-stage .folio-page { min-height: 908px; }
-.folio-stage .folio-story-page + .folio-story-page { box-shadow: inset 20px 0 24px -24px #264c3e75; }
+.folio-stage .folio-illustration-page + .folio-story-page { box-shadow: inset 20px 0 24px -24px #264c3e75; }
 .folio-cover { display: grid; grid-template-columns: 38% 62%; padding: 0; overflow: hidden; background: #dcdcc8; }
 .folio-cover-panel { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 62px 25px 48px 31px; color: #f2eee3; background-color: #264c3e; background-image: repeating-linear-gradient(0deg, #ffffff04 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, #00000009 0 1px, transparent 1px 3px); box-shadow: inset 13px 0 15px -12px #00000070, inset 2px 0 0 #ffffff18; z-index: 1; }
-.folio-cover-series { font: 10px/1.5 var(--font-ui); letter-spacing: .18em; }
 .folio-cover-title { margin: 58px 0 auto; }
 .folio-cover h2 { margin: 0; font: 600 27px/1.24 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
 .folio-cover-subtitle { margin: 24px 0; font: 17px/1.55 var(--font-ui); }
 .folio-cover-credit { margin-top: 32px; }
 .folio-cover-dedication { margin: 0 0 30px; font: 13px/1.6 var(--font-ui); }
-.folio-cover-brand { font: 11px/1.5 var(--font-ui); letter-spacing: .2em; }
+.folio-cover-logo { display: block; width: 150px; max-width: 100%; height: auto; }
 .folio-cover-art { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; background: #e3e3cf; }
-.folio-cover-art::before, .folio-cover-art::after { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: #264c3e40; }
-.folio-cover-art::before { left: 11%; }
-.folio-cover-art::after { right: 11%; }
 .folio-cover-image { display: block; width: 140%; max-width: none; height: 100%; object-fit: cover; }
 .folio-cover-emblem { font: italic 180px/1 Georgia, serif; color: var(--folio-ink); }
 .folio-cover-compact h2 { font-size: 20px; }
@@ -1675,10 +1671,11 @@ textarea {
 .folio-ink-defs { position: absolute; pointer-events: none; }
 .folio-qr { display: block; width: 62px; height: 62px; flex-shrink: 0; }
 .folio-qr svg { display: block; width: 100%; height: 100%; }
+.folio-story-qr-header { display: flex; justify-content: flex-end; height: 62px; margin-bottom: 20px; }
 .folio-page h3 { margin: 0 0 20px; text-align: center; font: italic 400 28px/1.2 Georgia, serif; overflow-wrap: anywhere; }
-.folio-artifact { position: absolute; bottom: 112px; left: 32px; right: 32px; margin: 0; text-align: center; }
-.folio-artifact img, .folio-artwork-missing { display: block; height: 300px; width: 100%; object-fit: contain; }
-.folio-artwork-missing { display: grid; place-items: center; font: italic 20px/1.5 Georgia, serif; }
+.folio-illustration-page { display: flex; align-items: center; justify-content: center; }
+.folio-artifact { width: 100%; margin: 0; text-align: center; }
+.folio-artifact img { display: block; height: 620px; width: 100%; object-fit: contain; }
 .folio-artifact figcaption { margin: 8px 0 0; min-height: 18px; font: 11px/18px var(--font-ui); }
 .folio-prose, .folio-measure { font: 21px/1.5 Georgia, "Times New Roman", serif; white-space: pre-wrap; overflow-wrap: anywhere; text-align: justify; }
 .folio-prose p, .folio-measure p { margin: 0 0 12px; text-indent: 1.3em; }
@@ -1692,6 +1689,9 @@ textarea {
 .folio-export-pages { position: fixed; left: -100000px; top: 0; width: 640px; pointer-events: none; }
 .folio-export-pages .folio-page { padding: 48px; width: 640px; height: 908px; min-height: 908px; overflow: hidden; }
 .folio-export-pages .folio-cover { padding: 0; }
+.folio-back-cover { background: var(--folio-paper); }
+.folio-back-cover-pattern { position: absolute; top: 0; left: 0; width: 100%; height: 75%; background-color: #264c3e; background-image: repeating-linear-gradient(0deg, #ffffff04 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, #00000009 0 1px, transparent 1px 3px); }
+.folio-back-cover-logo { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); display: block; width: 220px; height: auto; }
 .folio-measure { position: fixed; top: 0; left: -100000px; width: 544px; margin: 0; padding: 0; box-sizing: border-box; }
 .folio-measure-heading { font: italic 400 28px/1.2 Georgia, serif; }
 .folio-public-shell { max-width: 1440px; padding: 32px 40px 52px; margin: 0 auto; background: #e5e2d9; }
@@ -1706,14 +1706,15 @@ textarea {
   .folio-stage { flex-direction: column; max-width: 640px; }
   .folio-stage .folio-page { flex: 0 0 auto; padding: 32px 24px 116px; min-height: 0; }
   .folio-stage .folio-cover { padding: 0; min-height: 650px; }
+  .folio-stage .folio-back-cover { min-height: 650px; }
+  .folio-stage .folio-illustration-page { min-height: 540px; }
   .folio-stage .folio-cover-panel { padding: 35px 14px 30px 20px; }
   .folio-stage .folio-cover h2 { font-size: 20px; }
   .folio-stage .folio-cover-subtitle { font-size: 13px; }
   .folio-stage .folio-cover-dedication { font-size: 11px; }
   .folio-stage .folio-cover-title { margin-top: 35px; }
   .folio-stage .folio-prose { font-size: 20px; line-height: 1.55; text-align: left; }
-  .folio-stage .folio-artifact { position: static; margin: 24px -8px 0; }
-  .folio-stage .folio-artifact img, .folio-stage .folio-artwork-missing { height: 280px; }
+  .folio-stage .folio-artifact img { height: 400px; }
   .folio-stage .folio-page footer { left: 24px; right: 24px; }
 }
 @media (max-width: 760px) {
@@ -1728,3 +1729,9 @@ textarea {
   .folio-export-pages .folio-page { width: 640px; height: 908px; min-height: 908px; break-after: page; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .folio-export-pages .folio-page:last-child { break-after: auto; }
 }
+
+/* Saved generation uses the same paper panels and documentary UI type. */
+.saved-drafts-panel { margin-bottom: var(--space-thought); }
+.saved-work { font: 13px/1.6 var(--font-ui); }
+.saved-work summary { min-height: 44px; align-content: center; cursor: pointer; font-weight: 650; }
+.saved-work ul { margin: 0; padding-left: 20px; color: var(--ink-soft); }

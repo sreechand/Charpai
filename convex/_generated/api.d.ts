@@ -10,7 +10,11 @@
 
 import type * as auth from "../auth.js";
 import type * as files from "../files.js";
+import type * as generation from "../generation.js";
+import type * as generationWorker from "../generationWorker.js";
+import type * as generationWorkflow from "../generationWorkflow.js";
 import type * as http from "../http.js";
+import type * as notifications from "../notifications.js";
 import type * as payments from "../payments.js";
 import type * as razorpay from "../razorpay.js";
 import type * as runs from "../runs.js";
@@ -27,7 +31,11 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   files: typeof files;
+  generation: typeof generation;
+  generationWorker: typeof generationWorker;
+  generationWorkflow: typeof generationWorkflow;
   http: typeof http;
+  notifications: typeof notifications;
   payments: typeof payments;
   razorpay: typeof razorpay;
   runs: typeof runs;
@@ -62,4 +70,7 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
+  workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
+};

@@ -24,7 +24,7 @@ import {
   type FormEvent
 } from "react";
 
-import { useAuthSession, useEvidence, type StorybookPageSummary } from "@/app/providers";
+import { useAuthSession, useEvidence, type StorybookPageSummary, type SavedGeneration } from "@/app/providers";
 import { RazorpayCheckout } from "@/components/razorpay-checkout";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readPhotoPreviews, validateAudioFile, type PhotoPreview } from "@/lib/files";
@@ -113,7 +113,9 @@ export function StorybookApp() {
   const evidence = useEvidence();
   const auth = useAuthSession();
   const runIdRef = useRef<string | null>(null);
-  const generationTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const loadedDraftRef = useRef("");
+  const [openDraftVersion, setOpenDraftVersion] = useState(0);
+  const [savedAudioUrl, setSavedAudioUrl] = useState<string | null>(null);
   const [intake, setIntake] = useState(initialIntake);
   const [audio, setAudio] = useState<File | null>(null);
   const [isRecordingBusy, setIsRecordingBusy] = useState(false);
@@ -138,9 +140,63 @@ export function StorybookApp() {
   const generationStage =
     generationStages.find((stage) => stage.id === generationStageId) || generationStages[0];
 
+  const selectedGeneration = evidence.selectedGeneration;
   useEffect(() => {
-    return () => clearGenerationTimers(generationTimersRef.current);
-  }, []);
+    if (!selectedGeneration) return;
+    let cancelled = false;
+    const restore = async () => {
+      generationIdRef.current = selectedGeneration.generationId;
+      setActiveBookId(selectedGeneration.generationId);
+      setSavedAudioUrl(selectedGeneration.audioUrl);
+      setPhotos(selectedGeneration.photos.map(photo => ({id: photo.storageId, name: photo.fileName, url: photo.url || ""})));
+      if (selectedGeneration.stage !== "ready") setGenerationStageId(selectedGeneration.stage);
+      if (selectedGeneration.status === "queued" || selectedGeneration.status === "running") {
+        setStatus("generating"); setMessage("Your draft is saved. You can close this page and come back.");
+      } else if (selectedGeneration.status === "failed") {
+        setStatus("failed"); setMessage(selectedGeneration.error || "Your completed work is saved. Resume this draft to continue.");
+      }
+      const url = selectedGeneration.draftUrl || selectedGeneration.textDraftUrl;
+      const loadKey = `${selectedGeneration._id}:${url || "intake"}`;
+      if (loadedDraftRef.current === loadKey) return;
+      if (selectedGeneration.intakeUrl) {
+        const response = await fetch(selectedGeneration.intakeUrl); if (!response.ok) throw new Error("Your saved details could not be loaded.");
+        const restored = await response.json() as IntakePayload;
+        if (!cancelled) setIntake(restored);
+      } else if (!cancelled) setIntake(JSON.parse(selectedGeneration.inputJson) as IntakePayload);
+      if (!url) { loadedDraftRef.current = loadKey; return; }
+      const response = await fetch(url); if (!response.ok) throw new Error("Your saved draft could not be loaded. Open it again to retry.");
+      const data = await response.json() as GenerateResponse | StorybookDraft;
+      if (cancelled) return;
+      loadedDraftRef.current = loadKey;
+      if (selectedGeneration.draftUrl && "draft" in data && data.draft) {
+        setPendingRecommendation({intake: data.intake || JSON.parse(selectedGeneration.inputJson), draft: data.draft,
+          audioStorageId: selectedGeneration.audioStorageId, model: data.model || "model", elapsedMs: data.elapsedMs || 0, warning: data.warning || ""});
+        setStatus("reviewing"); setMessage("Your saved draft is ready to review.");
+      } else if ("sections" in data) { setDraft(data); }
+    };
+    void restore().catch(error => { if (!cancelled) setMessage(error instanceof Error ? error.message : "Your saved draft could not be loaded."); });
+    return () => { cancelled = true; };
+  }, [selectedGeneration, openDraftVersion]);
+
+  function startNewDraft() {
+    evidence.openGeneration(null); loadedDraftRef.current = ""; generationIdRef.current = undefined;
+    setAudio(null); setSavedAudioUrl(null); setPhotos([]); setIntake(initialIntake); setDraft(emptyDraft()); setPendingRecommendation(null); setStatus("idle"); setMessage(""); setWarning(""); setActiveBookId(crypto.randomUUID());
+  }
+
+  function openSavedDraft(id: string) {
+    setOpenDraftVersion(version => version + 1);
+    loadedDraftRef.current = "";
+    setDraft(emptyDraft()); setAudio(null); setPendingRecommendation(null); setMessage(""); setWarning("");
+    evidence.openGeneration(id);
+    const saved = evidence.draftStories?.find(d => d._id === id);
+    if (saved) { setActiveBookId(saved.generationId); generationIdRef.current = saved.generationId; }
+  }
+
+  async function resumeSavedDraft(id: string) {
+    openSavedDraft(id);
+    try { await evidence.resumeGeneration(id); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Your draft could not resume."); }
+  }
 
   useEffect(() => {
     const updateBrand = () => setIsBrandCompact(window.scrollY > 56);
@@ -169,6 +225,8 @@ export function StorybookApp() {
 
   function resumeStorybook() {
     if (!evidence.paymentResumeId) return;
+    const saved = evidence.draftStories?.find(d => d.generationId === evidence.paymentResumeId);
+    if (saved) { openSavedDraft(saved._id); return; }
     generationIdRef.current = evidence.paymentResumeId;
     setActiveBookId(evidence.paymentResumeId);
     if (evidence.paymentResponse) {
@@ -185,144 +243,28 @@ export function StorybookApp() {
   }
 
   const canGenerate =
-    Boolean(audio) &&
-    !isRecordingBusy &&
-    status !== "generating" &&
-    !hasPendingRecommendation &&
-    auth.status === "authenticated" &&
-    Boolean(auth.authToken);
+    (Boolean(audio) || selectedGeneration?.status === "failed") &&
+    !isRecordingBusy && status !== "generating" && !hasPendingRecommendation &&
+    auth.status === "authenticated" && Boolean(auth.authToken);
 
   async function handleGenerate() {
+    if (selectedGeneration?.status === "failed") { await resumeSavedDraft(selectedGeneration._id); return; }
     if (isRecordingBusy) return;
-    setMessage("");
-    setWarning("");
-    setPendingRecommendation(null);
-
+    setMessage(""); setWarning(""); setPendingRecommendation(null);
     const audioError = validateAudioFile(audio);
-    if (audioError) {
-      setStatus("failed");
-      setMessage(audioError);
-      return;
-    }
-
-    if (auth.status !== "authenticated" || !auth.authToken) {
-      setStatus("failed");
-      setMessage("Sign in before generating a Charpai preview.");
-      return;
-    }
-
-    clearGenerationTimers(generationTimersRef.current);
-    setGenerationStageId("uploading");
-    setStatus("generating");
-
-    const generationId = status === "failed" || evidence.paymentResumeId ? (generationIdRef.current || evidence.paymentResumeId || crypto.randomUUID()) : crypto.randomUUID();
-    generationIdRef.current = generationId;
-    setActiveBookId(generationId);
-    const generationStartedAt = Date.now();
-    evidence.recordEvent("generation_started", { generationId });
-    evidence.recordEvent("upload_started", { generationId, bytes: audio?.size, contentType: audio?.type });
-    let audioStorageId: Awaited<ReturnType<typeof evidence.uploadAudio>> = null;
+    if (audioError) { setStatus("failed"); setMessage(audioError); return; }
+    if (auth.status !== "authenticated") { setMessage("Sign in before creating your story."); return; }
+    setStatus("generating"); setGenerationStageId("uploading");
+    const generationId = crypto.randomUUID(); generationIdRef.current = generationId; setActiveBookId(generationId);
     try {
-      audioStorageId = await evidence.uploadAudio(audio as File);
-      evidence.recordEvent("upload_succeeded", { generationId, elapsedMs: Date.now() - generationStartedAt });
+      const audioStorageId = await evidence.uploadAudio(audio as File);
+      if (!audioStorageId) throw new Error("Your recording could not be saved.");
+      const photoStorageIds = [];
+      for (const photo of photos) if (photo.file) photoStorageIds.push(await evidence.uploadPhoto(photo.file));
+      await evidence.submitGeneration({generationId, inputJson: JSON.stringify(intake), audioStorageId, fileName: audio!.name, photoStorageIds});
+      setMessage("Your draft is saved. You can close this page and come back.");
     } catch (error) {
-      const text = error instanceof Error ? error.message : "Audio upload failed.";
-      evidence.recordEvent("upload_failed", { generationId, error: text });
-      setStatus("failed");
-      setMessage(text);
-      return;
-    }
-
-    try {
-      setGenerationStageId("preparing");
-      generationTimersRef.current = [
-        setTimeout(() => setGenerationStageId("transcribing"), 2500),
-        setTimeout(() => setGenerationStageId("understanding"), 22000),
-        setTimeout(() => setGenerationStageId("writing"), 36000),
-        setTimeout(() => setGenerationStageId("illustrating"), 52000)
-      ];
-      const requestPayload = { stage: "transcribe", input: intake, audioStorageId };
-      const fallbackBody = new FormData();
-      Object.entries(requestPayload.input).forEach(([key, value]) => fallbackBody.append(key, value));
-      fallbackBody.append("stage", "transcribe");
-      fallbackBody.append("audio", audio as File);
-
-      const transcriptionResponse = await fetch("/api/generate-storybook", audioStorageId
-        ? {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Generation-Id": generationId,
-              "X-Generation-Stage": "transcribe",
-              Authorization: `Bearer ${auth.authToken}`
-            },
-            body: JSON.stringify(requestPayload)
-          }
-        : {
-            method: "POST",
-            headers: { Authorization: `Bearer ${auth.authToken}`, "X-Generation-Id": generationId, "X-Generation-Stage": "transcribe" },
-            body: fallbackBody
-          });
-      const transcriptionResult = (await readGenerateResponse(
-        transcriptionResponse
-      )) as GenerateResponse;
-
-      if (!transcriptionResponse.ok || !transcriptionResult.transcript) {
-        throw new Error(transcriptionResult.error || "The interview could not be transcribed.");
-      }
-
-      clearGenerationTimers(generationTimersRef.current);
-      setGenerationStageId("understanding");
-      generationTimersRef.current = [
-        setTimeout(() => setGenerationStageId("writing"), 5000),
-        setTimeout(() => setGenerationStageId("illustrating"), 20000)
-      ];
-
-      const response = await fetch("/api/generate-storybook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Generation-Id": generationId,
-          "X-Generation-Stage": "compose",
-          Authorization: `Bearer ${auth.authToken}`
-        },
-        body: JSON.stringify({
-          stage: "compose",
-          input: intake,
-          transcript: transcriptionResult.transcript
-        })
-      });
-      const result = (await readGenerateResponse(response)) as GenerateResponse;
-
-      if (!response.ok || !result.draft) {
-        throw new Error(result.error || "The storybook could not be generated.");
-      }
-
-      evidence.recordEvent("preview_ready", { generationId, elapsedMs: Date.now() - generationStartedAt });
-      const generatedIntake = result.intake || requestPayload.input;
-      setPendingRecommendation({
-        intake: generatedIntake,
-        draft: result.draft,
-        audioStorageId,
-        model: result.model || "model",
-        elapsedMs: (transcriptionResult.elapsedMs || 0) + (result.elapsedMs || 1000),
-        warning: [transcriptionResult.warning, result.warning].filter(Boolean).join(" ")
-      });
-      setWarning("");
-      setStatus("reviewing");
-      setMessage(
-        `${result.model || "model"} prepared recommended changes in ${Math.max(
-          1,
-          Math.round((result.elapsedMs || 1000) / 1000)
-        )}s.`
-      );
-    } catch (error) {
-      const text = error instanceof Error ? error.message : "The storybook could not be generated.";
-      evidence.recordEvent("generation_failed", { generationId, error: text, elapsedMs: Date.now() - generationStartedAt });
-      setStatus("failed");
-      setMessage(text);
-    } finally {
-      clearGenerationTimers(generationTimersRef.current);
+      setStatus("failed"); setMessage(error instanceof Error ? error.message : "Your story could not be submitted.");
     }
   }
 
@@ -354,7 +296,7 @@ export function StorybookApp() {
         originPlace: accepted.intake.originPlace,
         languageMix: accepted.intake.languageMix,
         audioStorageId: accepted.audioStorageId || undefined,
-        hasAudio: Boolean(audio),
+        hasAudio: Boolean(accepted.audioStorageId),
         photoCount: photos.length
       });
       runIdRef.current = runId;
@@ -369,6 +311,7 @@ export function StorybookApp() {
         evidence.recordEvent("publish_succeeded", { generationId: generationIdRef.current });
         publishedPath = `/s/${page.slug}`;
         setPublishedStoryPath(publishedPath);
+        if (selectedGeneration && runId) await evidence.markGenerationPublished(selectedGeneration._id, runId);
       }
     } catch (error) {
       evidence.recordEvent("publish_failed", { generationId: generationIdRef.current, error: error instanceof Error ? error.message : "Publishing failed" });
@@ -516,7 +459,7 @@ export function StorybookApp() {
         </div>
         <div className="proof-strip" aria-label="Account actions">
           {auth.status === "authenticated" ? (
-            <button className="session-button" type="button" disabled={isRecordingBusy} onClick={() => { setAudio(null); void auth.signOut(); }}>
+            <button className="session-button" type="button" disabled={isRecordingBusy} onClick={() => { setAudio(null); setDraft(emptyDraft()); setPhotos([]); setPendingRecommendation(null); setSavedAudioUrl(null); setActiveBookId(null); setStatus("idle"); evidence.openGeneration(null); void auth.signOut(); }}>
               <LogOut size={16} aria-hidden />
               Sign out
             </button>
@@ -524,6 +467,7 @@ export function StorybookApp() {
         </div>
       </section>
 
+      {auth.status === "authenticated" ? <SavedDraftsPanel drafts={evidence.draftStories} onOpen={openSavedDraft} /> : null}
       {auth.status !== "authenticated" ? (
         <AuthGate auth={auth} />
       ) : evidence.paymentAvailable === undefined ? (
@@ -531,17 +475,19 @@ export function StorybookApp() {
       ) : !activeBookId && (!evidence.paymentAvailable || Boolean(evidence.paymentResumeId)) ? (
         <section className="purchase-onboarding" aria-label="Unlock your first storybook">
           <p className="eyebrow">Your family story starts here</p>
-          <h2>{evidence.paymentResumeId ? "Your storybook is waiting for you." : "One payment. One storybook to keep."}</h2>
-          <p>{evidence.paymentResumeId ? "You’ve already paid for this storybook. Pick up where you left off." : "Unlock one storybook before you record or upload your interview. You can read and revisit that book afterwards. Each additional storybook needs a new payment."}</p>
+          <h2>{evidence.paymentResumeId ? "Your storybook is waiting for you." : "One storybook. Four chances to get it right."}</h2>
+          <p>{evidence.paymentResumeId ? "You’ve already paid for this storybook. Pick up where you left off." : "Pay ₹200 for 4 generation credits. Each new storybook draft uses 1 credit, so you can try again until your story feels right. Reading, editing and exporting your saved books do not use credits."}</p>
           {evidence.paymentResumeId ? <>
             <button className="primary-button" type="button" onClick={resumeStorybook}>Continue your storybook</button>
+            {evidence.paymentAvailable ? <button className="session-button" type="button" onClick={startNewDraft}>Start a new draft · 1 credit</button> : null}
           </> : <RazorpayCheckout key={recordingRecoveryKey} />}
           <ProfileStoriesPanel deletingPageId={deletingPageId} onDelete={(pageId) => void handleDeleteStoryPage(pageId)} pages={evidence.storyPages} />
         </section>
       ) : (
       <section className={`workspace${activeDraft.sections.length ? "" : " workspace-empty"}`}>
         <aside className="intake-panel screen-only" aria-label="Storybook intake">
-          {draft.sections.length && !hasPendingRecommendation ? <button className="session-button" type="button" onClick={() => window.location.reload()}>Start another storybook</button> : null}
+          {draft.sections.length && !hasPendingRecommendation ? <button className="session-button" type="button" onClick={startNewDraft}>Start another storybook</button> : null}
+          <p role="status">{evidence.paymentCredits ?? 0} generation credits remaining. Retrying this draft uses no extra credit.</p>
           <div className="panel-heading">
             <div>
               <p className="eyebrow">{activeDraft.sections.length ? "Review" : "Audio intake"}</p>
@@ -551,8 +497,9 @@ export function StorybookApp() {
             </div>
           </div>
 
+          {savedAudioUrl ? <div className="recording-preview"><span>{selectedGeneration?.fileName || "Saved recording"}</span><audio controls src={savedAudioUrl} /><a className="session-button" href={savedAudioUrl} target="_blank" rel="noreferrer"><Download size={16} aria-hidden /> Download saved recording</a></div> : null}
           <div className="upload-zone">
-            <AudioIntake
+            {!savedAudioUrl ? <AudioIntake
               onEvent={evidence.recordEvent}
               key={recordingRecoveryKey}
               recoveryKey={recordingRecoveryKey}
@@ -560,7 +507,7 @@ export function StorybookApp() {
               onChange={setAudio}
               onBusyChange={setIsRecordingBusy}
               disabled={status === "generating" || hasPendingRecommendation || isPublishing}
-            />
+            /> : null}
             <label className="upload-card">
               <ImagePlus size={22} aria-hidden />
               <span>{photos.length ? `${photos.length} photo previewed` : "Optional photos"}</span>
@@ -641,7 +588,7 @@ export function StorybookApp() {
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} aria-hidden /> Generate preview
+                  <Sparkles size={18} aria-hidden /> {selectedGeneration?.status === "failed" ? "Resume saved draft" : "Generate preview"}
                 </>
               )}
             </button>
@@ -652,9 +599,20 @@ export function StorybookApp() {
           ) : null}
 
           {status === "generating" ? (
-            <GenerationProgress stage={generationStage} />
+            <GenerationProgress stage={generationStage} completedParts={selectedGeneration?.completedParts} totalParts={selectedGeneration?.totalParts} />
           ) : null}
 
+          {selectedGeneration ? <details className="profile-story-panel saved-work"><summary>Saved work for this draft</summary>
+            <ul><li>Original recording and entered details</li>
+              {selectedGeneration.photos.length ? <li>{selectedGeneration.photos.length} family photos</li> : null}
+              {selectedGeneration.completedSteps.includes("audio.parts") ? <li>Prepared recording parts</li> : null}
+              {selectedGeneration.completedParts ? <li>{selectedGeneration.completedParts} completed transcript parts</li> : null}
+              {selectedGeneration.completedSteps.includes("transcript") ? <li>Complete transcript</li> : null}
+              {selectedGeneration.completedSteps.includes("intake") ? <li>Extracted family details</li> : null}
+              {selectedGeneration.completedSteps.includes("draft.text") ? <li>Storybook text</li> : null}
+              {selectedGeneration.completedSteps.filter(key => key.startsWith("illustration.")).length ? <li>{selectedGeneration.completedSteps.filter(key => key.startsWith("illustration.")).length} completed illustrations</li> : null}
+            </ul>
+          </details> : null}
           {pendingRecommendation ? (
             <RecommendationReview
               recommendation={pendingRecommendation}
@@ -735,8 +693,9 @@ export function StorybookApp() {
 }
 
 function GenerationProgress({
-  stage
+  stage, completedParts, totalParts
 }: {
+  completedParts?: number; totalParts?: number;
   stage: (typeof generationStages)[number];
 }) {
   const stageIndex = generationStages.findIndex((candidate) => candidate.id === stage.id);
@@ -755,7 +714,8 @@ function GenerationProgress({
         </div>
         <span>{stageIndex + 1} / {generationStages.length}</span>
       </div>
-      <p>{stage.detail}</p>
+      <p>{stage.detail}{stage.id === "transcribing" && totalParts ? ` ${completedParts || 0} of ${totalParts} recording parts saved.` : ""}</p>
+      <p>Your completed steps are saved. You can leave this page and return later.</p>
       <div
         className="generation-progress-track"
         role="progressbar"
@@ -783,9 +743,19 @@ function GenerationProgress({
   );
 }
 
-function clearGenerationTimers(timers: Array<ReturnType<typeof setTimeout>>) {
-  timers.forEach((timer) => clearTimeout(timer));
-  timers.length = 0;
+function SavedDraftsPanel({drafts, onOpen}: {drafts: SavedGeneration[] | undefined; onOpen: (id: string) => void}) {
+  const saved = drafts?.filter(d => d.status !== "published");
+  if (!saved?.length) return null;
+  return <section className="profile-story-panel saved-drafts-panel screen-only" aria-label="Saved drafts">
+    <div className="profile-story-heading"><div><p className="eyebrow">Saved drafts</p><h3>Pick up where you left off</h3></div><span>{saved.length}</span></div>
+    <p className="profile-story-empty">Recordings and finished steps are kept here. Resuming uses no extra credit.</p>
+    <ul className="profile-story-list">{saved.map(d => <li key={d._id}>
+      <div><strong>{d.title}</strong><span>{d.fileName}</span>
+        <span>{d.status === "ready" ? "Ready to review" : d.status === "failed" ? "Paused · completed work saved" : generationStages.find(s => s.id === d.stage)?.label || "Saved draft"}
+          {d.totalParts && d.stage === "transcribing" ? ` · ${d.completedParts}/${d.totalParts} recording parts saved` : ""}</span>
+      </div><button className="secondary-button" type="button" onClick={() => onOpen(d._id)}>Open draft</button>
+    </li>)}</ul>
+  </section>;
 }
 
 function RecommendationReview({
@@ -799,7 +769,6 @@ function RecommendationReview({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const seconds = Math.max(1, Math.round(recommendation.elapsedMs / 1000));
 
   return (
     <section className="recommendation-review">
@@ -808,7 +777,7 @@ function RecommendationReview({
           <p className="eyebrow">Recommended changes</p>
           <h3>{recommendation.draft.title || "Generated storybook preview"}</h3>
         </div>
-        <span>{`${recommendation.model} / ${seconds}s`}</span>
+        <span>Saved draft</span>
       </div>
 
       <dl className="recommendation-fields">
@@ -939,17 +908,19 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [needsAccount, setNeedsAccount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const unavailable = auth.status === "unavailable";
 
   async function handleGoogleSignIn() {
     setAuthMessage("");
+    setNeedsAccount(false);
     setIsSubmitting(true);
     try {
       await auth.signInWithGoogle();
-    } catch (error) {
-      setAuthMessage(error instanceof Error ? error.message : "Google sign-in failed.");
+    } catch {
+      setAuthMessage("Google sign-in could not start. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -958,6 +929,7 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
   async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthMessage("");
+    setNeedsAccount(false);
     setIsSubmitting(true);
 
     try {
@@ -967,7 +939,17 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
         await auth.signInWithEmail(email, password);
       }
     } catch (error) {
-      setAuthMessage(error instanceof Error ? error.message : "Email sign-in failed.");
+      const data = error && typeof error === "object" && "data" in error ? error.data : null;
+      const code = data && typeof data === "object" && "code" in data ? data.code : null;
+      const missingAccount = mode === "signIn" && code === "ACCOUNT_NOT_FOUND";
+      setNeedsAccount(missingAccount);
+      setAuthMessage(missingAccount
+        ? "No email account found. Create an account to get started, or continue with Google if you signed up that way."
+        : code === "INCORRECT_PASSWORD"
+          ? "Incorrect password. Try again, or continue with Google if you signed up that way."
+          : mode === "signUp"
+            ? "We could not create this account. If you already registered, choose Sign in or Continue with Google."
+            : "Sign-in was unsuccessful. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1025,7 +1007,7 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
               className="form-switch"
               type="button"
               disabled={isSubmitting || unavailable}
-              onClick={() => { setAuthMessage(""); setMode((current) => (current === "signIn" ? "signUp" : "signIn")); }}
+              onClick={() => { setAuthMessage(""); setNeedsAccount(false); setMode((current) => (current === "signIn" ? "signUp" : "signIn")); }}
             >
               {mode === "signIn" ? "Sign up" : "Sign in"}
             </button>
@@ -1058,29 +1040,20 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
           </div>
         ) : null}
         {authMessage ? (
-          <div className="notice error">
+          <div className="notice error" role="alert">
             <AlertTriangle size={18} aria-hidden />
-            <span>{authMessage}</span>
+            <div>
+              <p style={{ margin: 0 }}>{authMessage}</p>
+              {needsAccount ? <button className="form-switch" style={{ marginTop: 10 }} type="button"
+                onClick={() => { setMode("signUp"); setAuthMessage(""); setNeedsAccount(false); }}>
+                Create an account
+              </button> : null}
+            </div>
           </div>
         ) : null}
       </div>
     </section>
   );
-}
-
-async function readGenerateResponse(response: Response): Promise<GenerateResponse> {
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    return response.json();
-  }
-
-  const text = await response.text();
-  return {
-    error:
-      response.status === 413
-        ? "The recording is too large for this upload path. Try a compressed mp3 or m4a file."
-        : text || "The storybook server returned an unexpected response."
-  };
 }
 
 function StorybookEditor({ draft, photos, onDraftChange, onSectionChange, storyUrl, allowExport, onBeforeExport, onAfterExport }: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import QRCode from "qrcode";
 import type { StorySection } from "@/lib/storybook";
@@ -62,7 +62,9 @@ export function StorybookReader({ story, storyUrl, showExport = true, onBeforeEx
         const headingHeight = measure(section.heading);
         probe.classList.remove("folio-measure-heading");
         const content = [index === 0 && story.dedication.length > 160 ? story.dedication : "", section.body, index === story.sections.length - 1 ? story.closingNote : ""].filter(Boolean).join("\n\n");
-        const chunks = paginateStoryText(content, Math.max(130, 370 - headingHeight), measure);
+        // Text gets its own full page; reserve the heading, footer and QR area.
+        const textHeight = Math.max(130, 720 - headingHeight);
+        const chunks = paginateStoryText(content, textHeight, measure, index === 0 ? Math.max(130, textHeight - 82) : textHeight);
         for (const [part, body] of chunks.entries()) output.push({ key: `${index}-${part}`, section, body, continued: part > 0 });
       }
       probe.remove();
@@ -72,10 +74,13 @@ export function StorybookReader({ story, storyUrl, showExport = true, onBeforeEx
     return () => { cancelled = true; };
   }, [story]);
 
-  const spreads = Math.ceil(pages.length / 2);
-  const current = Math.min(position, spreads);
-  const visiblePages = current > 0 ? pages.slice((current - 1) * 2, current * 2) : [];
-  const move = (direction: number) => setPosition(Math.max(0, Math.min(spreads, current + direction)));
+  const spreads = pages.length;
+  const lastPosition = spreads + 1;
+  const current = Math.min(position, lastPosition);
+  const isBackCover = current === lastPosition;
+  const visiblePage = current > 0 && !isBackCover ? pages[current - 1] : undefined;
+  const pageLabel = current === 0 ? "Cover" : isBackCover ? "Back cover" : `Spread ${current} of ${spreads}`;
+  const move = (direction: number) => setPosition(Math.max(0, Math.min(lastPosition, current + direction)));
 
   async function exportBook() {
     setBusy(true); setError("");
@@ -92,24 +97,31 @@ export function StorybookReader({ story, storyUrl, showExport = true, onBeforeEx
 
   return <section className="folio-reader" aria-label="Storybook reader">
     <div className="folio-toolbar screen-only">
-      <span>{current === 0 ? "Cover" : `Spread ${current} of ${spreads}`}</span>
+      <span>{pageLabel}</span>
       {showExport ? <button type="button" className="folio-export" disabled={busy || !pages.length} onClick={exportBook}>
         <Download size={17} aria-hidden />{busy ? "Creating PDF…" : "Export PDF"}
       </button> : null}
     </div>
     {!storyUrl ? <p className="folio-unsaved screen-only">Save the story to add its QR code and online link.</p> : null}
     {error ? <p role="alert" className="folio-export-error screen-only">{error}</p> : null}
-    <div className={`folio-stage screen-only${current === 0 ? " folio-closed" : ""}`}>
-      {current === 0 ? <Cover story={story} /> : visiblePages.map((page, index) => <StoryPage key={page.key} page={page} url={absoluteUrl} number={(current - 1) * 2 + index + 1} />)}
+    <div className={`folio-stage screen-only${current === 0 || isBackCover ? " folio-closed" : ""}`}>
+      {current === 0 ? <Cover story={story} /> : isBackCover ? <BackCover /> : visiblePage ? <Fragment key={visiblePage.key}>
+        <IllustrationPage page={visiblePage} />
+        <StoryPage page={visiblePage} url={absoluteUrl} number={current * 2} />
+      </Fragment> : null}
     </div>
     <nav className="folio-navigation screen-only" aria-label="Turn storybook pages">
       <button type="button" onClick={() => move(-1)} disabled={current === 0} aria-label="Previous pages"><ChevronLeft aria-hidden /></button>
-      <span aria-live="polite">{current === 0 ? "Open the book" : `Spread ${current} of ${spreads}`}</span>
-      <button type="button" onClick={() => move(1)} disabled={current >= spreads || !pages.length} aria-label="Next pages"><ChevronRight aria-hidden /></button>
+      <span aria-live="polite">{current === 0 ? "Open the book" : pageLabel}</span>
+      <button type="button" onClick={() => move(1)} disabled={current >= lastPosition || !pages.length} aria-label="Next pages"><ChevronRight aria-hidden /></button>
     </nav>
     <div className="folio-export-pages" ref={exportRef} aria-hidden="true" data-pagination-ready={pages.length > 0}>
       <Cover story={story} exporting />
-      {pages.map((page, index) => <StoryPage key={page.key} page={page} url={absoluteUrl} number={index + 1} exporting />)}
+      {pages.map((page, index) => <Fragment key={page.key}>
+        <IllustrationPage page={page} exporting />
+        <StoryPage page={page} url={absoluteUrl} number={(index + 1) * 2} exporting />
+      </Fragment>)}
+      <BackCover exporting />
     </div>
   </section>;
 }
@@ -119,13 +131,13 @@ function Cover({ story, exporting = false }: { story: ReaderStory; exporting?: b
   const compact = story.title.length > 65 || story.subtitle.length > 100;
   return <article className={`folio-page folio-cover${compact ? " folio-cover-compact" : ""}`} data-export-page={exporting || undefined}>
     <div className="folio-cover-panel">
-      <span className="folio-cover-series">A FAMILY STORY</span>
       <div className="folio-cover-title"><h2>{story.title}</h2>
         {story.subtitle ? <p className="folio-cover-subtitle">{story.subtitle}</p> : null}
       </div>
       <div className="folio-cover-credit">
         {story.dedication && story.dedication.length <= 160 ? <p className="folio-cover-dedication">{story.dedication}</p> : null}
-        <span className="folio-cover-brand">CHARPAI</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="folio-cover-logo" src="/landing/charpai-back-cover-logo.png" alt="Charpai" width="601" height="161" />
       </div>
     </div>
     <div className="folio-cover-art">
@@ -148,15 +160,31 @@ function ArtifactImage({ src, alt, className }: { src: string; alt: string; clas
   </>;
 }
 
+function IllustrationPage({ page, exporting = false }: { page: ReadingPage; exporting?: boolean }) {
+  // One section illustration accompanies its opening spread. Continuations stay blank.
+  const image = !page.continued ? page.section.illustrationUrl : null;
+  return <article className="folio-page folio-illustration-page" aria-label={image ? "Illustration page" : "Blank facing page"} data-export-page={exporting || undefined}>
+    {image ? <figure className="folio-artifact">
+      <ArtifactImage src={image} alt={page.section.artifactSubject || "Story artifact"} />
+      {page.section.artifactSubject ? <figcaption>{page.section.artifactSubject}</figcaption> : null}
+    </figure> : null}
+  </article>;
+}
+
+function BackCover({ exporting = false }: { exporting?: boolean }) {
+  return <article className="folio-page folio-back-cover" aria-label="Back cover" data-export-page={exporting || undefined}>
+    <div className="folio-back-cover-pattern" aria-hidden="true" />
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img className="folio-back-cover-logo" src="/landing/charpai-back-cover-logo.png" alt="Charpai" width="601" height="161" />
+  </article>;
+}
+
 function StoryPage({ page, url, number, exporting = false }: { page: ReadingPage; url: string; number: number; exporting?: boolean }) {
   return <article className="folio-page folio-story-page" data-export-page={exporting || undefined}>
+    {number === 2 && url ? <div className="folio-story-qr-header"><StoryQrCode url={url} /></div> : null}
     <h3>{page.section.heading}</h3>
     <div className="folio-prose">{page.body.split(/\n\s*\n/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
-    <figure className="folio-artifact">
-      {page.section.illustrationUrl ? <ArtifactImage src={page.section.illustrationUrl} alt={page.section.artifactSubject || "Story artifact"} /> : <div className="folio-artwork-missing">{page.section.artifactSubject || "Artwork not available"}</div>}
-      {page.section.artifactSubject ? <figcaption>{page.section.artifactSubject}</figcaption> : null}
-    </figure>
-    <footer>{url ? <StoryQrCode url={url} /> : <span />}<span>{page.continued ? "Continued · " : ""}{number}</span></footer>
+    <footer><span /><span>{page.continued ? "Continued · " : ""}{number}</span></footer>
   </article>;
 }
 

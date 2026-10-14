@@ -24,9 +24,24 @@ const charpaiDraftDesign = v.object({
 export default defineSchema({
   ...authTables,
 
+  emailNotifications: defineTable({
+    key: v.string(),
+    kind: v.union(v.literal("waitlist_signup"), v.literal("account_signup"), v.literal("login"), v.literal("generation_started"), v.literal("generation_ready"), v.literal("generation_failed")),
+    userId: v.optional(v.id("users")),
+    waitlistId: v.optional(v.id("waitlist")),
+    generationId: v.optional(v.string()),
+    title: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("queued"), v.literal("skipped")),
+    emailIds: v.optional(v.array(v.string())),
+    createdAt: v.number(),
+    queuedAt: v.optional(v.number())
+  }).index("by_key", ["key"]).index("by_status", ["status"]),
+
   paymentOrders: defineTable({
     userId: v.id("users"),
     orderId: v.string(),
+    creditsPerPurchase: v.optional(v.number()),
+    parentOrderId: v.optional(v.string()),
     amount: v.number(),
     currency: v.string(),
     status: v.union(v.literal("created"), v.literal("paid")),
@@ -45,7 +60,25 @@ export default defineSchema({
   }).index("by_order_id", ["orderId"])
     .index("by_user_id_and_status", ["userId", "status"])
     .index("by_available", ["userId", "status", "generationId"])
-    .index("by_generation", ["userId", "generationId"]),
+    .index("by_generation", ["userId", "generationId"])
+    .index("by_generationId", ["generationId"])
+    .index("by_unfinished", ["userId", "status", "runId"]),
+
+  generationDrafts: defineTable({
+    userId: v.id("users"), generationId: v.string(), paymentOrderId: v.id("paymentOrders"),
+    inputJson: v.string(), audioStorageId: v.id("_storage"), photoStorageIds: v.optional(v.array(v.id("_storage"))), fileName: v.string(), title: v.string(),
+    status: v.union(v.literal("queued"), v.literal("running"), v.literal("failed"), v.literal("ready"), v.literal("published")),
+    stage: v.union(v.literal("preparing"), v.literal("transcribing"), v.literal("understanding"), v.literal("writing"), v.literal("illustrating"), v.literal("ready")),
+    completedParts: v.number(), totalParts: v.number(), attemptId: v.string(), workflowId: v.optional(v.string()),
+    runId: v.optional(v.id("runs")), error: v.optional(v.string()), createdAt: v.number(), updatedAt: v.number()
+  }).index("by_userId", ["userId"]).index("by_generationId", ["generationId"]),
+  generationPhotos: defineTable({
+    userId: v.id("users"), storageId: v.id("_storage"), fileName: v.string(), contentType: v.string(), size: v.number(), createdAt: v.number()
+  }).index("by_storage_id", ["storageId"]).index("by_userId", ["userId"]),
+  generationCheckpoints: defineTable({
+    draftId: v.id("generationDrafts"), key: v.string(), artifactStorageId: v.id("_storage"),
+    model: v.optional(v.string()), providerRequestId: v.optional(v.string()), createdAt: v.number()
+  }).index("by_draftId_and_key", ["draftId", "key"]),
 
   productEvents: defineTable({
     userId: v.id("users"), name: v.string(), createdAt: v.number(),
@@ -123,6 +156,7 @@ export default defineSchema({
 
   storybookImages: defineTable({
     userId: v.id("users"),
+    generationDraftId: v.optional(v.id("generationDrafts")),
     storageId: v.id("_storage"),
     contentType: v.string(),
     size: v.number(),
