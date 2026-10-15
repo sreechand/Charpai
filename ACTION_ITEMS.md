@@ -1,3 +1,7 @@
+# Text-editing release — 2026-10-15
+
+- Commit and publish scoped exact-wording editing/regeneration, text download and owner-safe reopening of saved wording. Preserve the current launch flag and already-live PDF template. 79 tests, TypeScript/build and release browser checks pass; deployment/public-domain verification follows. Other local projects remain outside this release.
+
 # Project action items
 
 - 2026-10-14: Resend is live on production `elegant-mosquito-650`. Infomaniak records saved and sender verified; existing inbox preserved. Restricted sending key and signed delivery callback connected privately. Setup email and controlled signup alert delivered; duplicate signup produced one alert. Signup to owner, login/story to account user. 22 earlier tests and deployment TypeScript checks pass. Historical pending setup entries below are superseded. Next: observe real customer events and remove the unused first restricted key during housekeeping. Details: `docs/SIGNUP_NOTIFICATIONS.md`.

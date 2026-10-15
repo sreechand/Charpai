@@ -37,3 +37,7 @@ The prompt in `lib/storybook.ts` requires these fields and asks the model to sel
 - Poster/stamp illustration: uses the memory variables and minimal artifact forms.
 - Controls: UI font, 44px hit areas, quiet borders, focus rings in pen blue.
 - Print output: paper background and no app chrome.
+
+## Generated book text editing — 2026-10-15
+
+Use a separate paper working-copy form above the shared reader. Controls retain 44px minimum targets, 14px UI labels/help, story-serif fields and pen-blue focus. Keep 16px object gaps and 32px thought spacing around action/chapter groups. Apply with Regenerate storybook; Cancel edits restores the existing book and focus returns to Edit story text. Wrap the Download text/Export PDF action group on phones. Never export the old wording while editing is open. Desktop/390px browser checks passed.

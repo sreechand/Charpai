@@ -6,6 +6,7 @@ import type {CSSProperties} from "react";
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import QRCode from "qrcode";
+import {downloadStorybookText} from "@/lib/storybook-text";
 import type { StorySection } from "@/lib/storybook";
 import { paginateStoryText } from "@/lib/storybook-pagination";
 import {storybookScript} from "@/lib/storybook-typography";
@@ -33,8 +34,8 @@ export function StoryQrCode({ url }: { url: string }) {
   </a>;
 }
 
-export function StorybookReader({ story, storyUrl, showExport = true, audioUrl, onBeforeExport, onAfterExport }: {
-  story: ReaderStory; storyUrl?: string; showExport?: boolean; audioUrl?: string | null; onBeforeExport?: () => Promise<void>; onAfterExport?: () => Promise<void>;
+export function StorybookReader({ story, storyUrl, showExport = true, showTextDownload = true, audioUrl, onBeforeExport, onAfterExport }: {
+  story: ReaderStory; storyUrl?: string; showExport?: boolean; showTextDownload?: boolean; audioUrl?: string | null; onBeforeExport?: () => Promise<void>; onAfterExport?: () => Promise<void>;
 }) {
   const [audioTarget, setAudioTarget] = useState<AudioTarget | null>(null);
   const script = useMemo(() => storybookScript(story), [story]);
@@ -145,9 +146,15 @@ export function StorybookReader({ story, storyUrl, showExport = true, audioUrl, 
   return <section ref={readerRef} className="folio-reader" data-story-script={script} aria-label="Storybook reader">
     <div className="folio-toolbar screen-only">
       <span>{pageLabel}</span>
+      <div className="folio-download-actions">
+      {showTextDownload ? <button type="button" className="folio-export" disabled={busy || !story.sections.length} onClick={() => {
+        try {downloadStorybookText(story); setError("");}
+        catch {setError("The text could not be downloaded. Try again.");}
+      }}><Download size={17} aria-hidden />Download text</button> : null}
       {showExport ? <button type="button" className="folio-export" disabled={busy || !pages.length} onClick={exportBook}>
         <Download size={17} aria-hidden />{busy ? "Creating PDF…" : "Export PDF"}
       </button> : null}
+      </div>
     </div>
     {!storyUrl ? <p className="folio-unsaved screen-only">Save the story to add its QR code and online link.</p> : null}
     {error ? <p role="alert" className="folio-export-error screen-only">{error}</p> : null}

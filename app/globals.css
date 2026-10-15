@@ -1645,7 +1645,7 @@ textarea {
 .folio-reader { --folio-ink: var(--ink); --folio-paper: var(--paper); --folio-accent: var(--testcard); color: var(--folio-ink); min-width: 0; width: 100%; container-type: inline-size; }
 .folio-reader[data-story-script="telugu"], .folio-measure[data-story-script="telugu"] { --font-story: "Telugu MN", "Noto Serif Telugu", Georgia, serif; }
 .storybook-page:has(.folio-reader) { display: block; }
-.folio-toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-object); margin-bottom: var(--space-thought); font: 13px/1.5 var(--font-ui); }
+.folio-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-object); margin-bottom: var(--space-thought); font: 13px/1.5 var(--font-ui); }
 .folio-export { display: inline-flex; align-items: center; gap: var(--space-touch); border: 1px solid var(--line-strong); padding: 10px 14px; border-radius: var(--radius-small); background: var(--folio-paper); color: var(--folio-ink); font: 650 14px/1.4 var(--font-ui); min-height: 44px; cursor: pointer; }
 .folio-export:disabled { opacity: .5; cursor: wait; }
 .folio-unsaved, .folio-export-error { font: 13px/1.6 var(--font-ui); margin: 0 0 var(--space-object); }
@@ -1743,7 +1743,7 @@ textarea {
 .folio-public-header a { font: 26px var(--font-story); color: var(--folio-ink); text-decoration: none; }
 .folio-edit-fields { margin-top: var(--space-thought); padding: var(--space-thought); border: 1px solid var(--line); background: var(--paper); }
 .folio-edit-fields summary { cursor: pointer; font: 16px var(--font-ui); }
-.folio-edit-fields label { display: block; margin-top: var(--space-object); font: 13px var(--font-ui); }
+.folio-edit-fields label { display: block; margin-top: var(--space-object); font: 14px/1.5 var(--font-ui); }
 .folio-edit-fields input, .folio-edit-fields textarea { display: block; width: 100%; box-sizing: border-box; margin-top: var(--space-touch); padding: var(--space-object); border: 1px solid var(--line); border-radius: var(--radius-small); color: var(--ink); background: var(--paper-deep); font: 18px/1.5 var(--font-story); }
 .folio-edit-fields textarea { min-height: 130px; }
 @container (max-width: 759px) {
@@ -1788,3 +1788,14 @@ textarea {
 .saved-work { font: 13px/1.6 var(--font-ui); }
 .saved-work summary { min-height: 44px; align-content: center; cursor: pointer; font-weight: 650; }
 .saved-work ul { margin: 0; padding-left: 20px; color: var(--ink-soft); }
+
+/* Staged text editing and wrapping downloads. */
+.folio-download-actions, .folio-text-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-object); }
+.folio-text-actions { margin-block: var(--space-thought); }
+.folio-text-actions p { flex: 1 1 240px; margin: 0; color: var(--ink-soft); font: 14px/1.5 var(--font-ui); }
+.folio-edit-fields + .folio-reader { margin-top: var(--space-thought); }
+.folio-edit-fields fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.folio-edit-fields .folio-edit-chapter { margin-block: var(--space-thought); }
+.folio-edit-fields > p, .folio-edit-fields fieldset > p { color: var(--ink-soft); font: 14px/1.5 var(--font-ui); }
+.folio-edit-fields .folio-recording-choice { display: flex; align-items: center; gap: var(--space-touch); min-height: 44px; }
+.folio-edit-fields .folio-recording-choice input { width: 20px; height: 20px; margin: 0; flex-shrink: 0; }

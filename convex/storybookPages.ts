@@ -122,6 +122,23 @@ export const getPublicBySlug = query({
   }
 });
 
+/** Restore the latest saved text only after checking the caller owns its paid run. */
+export const getOwnedByRun = query({
+  args: {runId: v.id("runs")},
+  returns: v.union(v.null(),v.object({slug:v.string(),draftJson:v.string()})),
+  handler: async (ctx,args) => {
+    const ownerId=await requireAuthUserId(ctx);
+    await requireOwnedRun(ctx,args.runId,ownerId);
+    const page=await ctx.db.query("storybookPages").withIndex("by_run",q=>q.eq("runId",args.runId)).unique();
+    if(!page || page.status!=="published" || page.ownerId!==ownerId)return null;
+    const {_id,slug,createdAt,updatedAt,...published}=await toPublicPage(ctx,page);
+    void _id;void createdAt;void updatedAt;
+    return {slug,draftJson:JSON.stringify({...published,
+      illustrationStorageId:page.illustrationStorageId || "",
+      sections:published.sections.map((section,index)=>({...section,illustrationStorageId:page.sections[index].illustrationStorageId}))})};
+  }
+});
+
 export const publish = mutation({
   args: {
     runId: v.optional(v.id("runs")),
@@ -200,7 +217,7 @@ export const deletePage = mutation({
   }
 });
 
-async function requireAuthUserId(ctx: MutationCtx) {
+async function requireAuthUserId(ctx: MutationCtx | QueryCtx) {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new Error("Sign in to manage storybook pages.");
@@ -208,7 +225,7 @@ async function requireAuthUserId(ctx: MutationCtx) {
   return userId;
 }
 
-async function requireOwnedRun(ctx: MutationCtx, runId: Id<"runs">, ownerId: Id<"users">) {
+async function requireOwnedRun(ctx: MutationCtx | QueryCtx, runId: Id<"runs">, ownerId: Id<"users">) {
   const run = await ctx.db.get(runId);
   if (!run) {
     throw new Error("Storybook run not found.");

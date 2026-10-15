@@ -72,6 +72,7 @@ type EvidenceContextValue = {
   markDraftReady: (id: string, title: string) => Promise<void>;
   markExported: (id: string, title: string) => Promise<void>;
   markFailed: (id: string, error: string) => Promise<void>;
+  loadSavedBookByRun: (runId: string) => Promise<{draft: Partial<StorybookDraft>; slug: string} | null>;
   publishStoryPage: (draft: StorybookDraft, runId?: string) => Promise<StorybookPageSummary | null>;
   deleteStoryPage: (pageId: string) => Promise<void>;
 };
@@ -259,6 +260,10 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
       markFailed: async (id, error) => {
         await failed({ id: id as never, error });
       },
+      loadSavedBookByRun: async runId => {
+        const saved=await convexClient!.query(api.storybookPages.getOwnedByRun,{runId:runId as Id<"runs">});
+        return saved ? {draft:JSON.parse(saved.draftJson) as Partial<StorybookDraft>,slug:saved.slug} : null;
+      },
       publishStoryPage: async (draft, runId) => {
         const { illustrationStorageId, illustrationUrl, ...publishableDraft } = draft;
         void illustrationUrl;
@@ -373,6 +378,7 @@ function LocalEvidenceProvider({ children }: { children: ReactNode }) {
       markDraftReady: async (id, title) => save(id, { status: "draft_ready", title }),
       markExported: async (id, title) => save(id, { status: "exported", title }),
       markFailed: async (id, error) => save(id, { status: "failed", error }),
+      loadSavedBookByRun: async () => null,
       publishStoryPage: async () => null,
       deleteStoryPage: async () => undefined
     }),

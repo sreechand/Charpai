@@ -105,3 +105,29 @@ test("saving a long book retains every chapter and separates cover text from edi
   expect(reopened?.coverSubtitle).toBe(draft.coverSubtitle);
   expect(reopened?.subtitle).toBe(draft.subtitle);
 });
+
+
+test("edited books reopen with the latest wording and original artwork IDs only for their owner",async()=>{
+  const t=convexTest(schema,modules);
+  const {owner,other,run}=await t.run(async ctx=>{
+    const owner=await ctx.db.insert("users",{}),other=await ctx.db.insert("users",{});
+    const run=await ctx.db.insert("runs",{userId:owner,buyerName:"",email:"",elderName:"Fictional",relationship:"Parent",originPlace:"Home",languageMix:"English",hasAudio:false,photoCount:0,status:"draft_ready",createdAt:1,updatedAt:1});
+    return {owner,other,run};
+  });
+  const {illustrationUrl,illustrationStorageId,...base}=demoDraft();void illustrationUrl;void illustrationStorageId;
+  const draft={...base,sections:base.sections.map(({illustrationUrl,illustrationStorageId,...section})=>{void illustrationUrl;void illustrationStorageId;return section;})};
+  const user=t.withIdentity({subject:`${owner}|session`});
+  const original=await user.mutation(api.storybookPages.publish,{runId:run,draft});
+  const edited={...draft,title:"Updated title",coverSubtitle:"Short line",sections:draft.sections.map((section,index)=>({...section,body:index===0?"Exact edited wording.\n\nమా జ్ఞాపకాలు":section.body}))};
+  const saved=await user.mutation(api.storybookPages.publish,{runId:run,draft:edited});
+  const reopened=await user.query(api.storybookPages.getOwnedByRun,{runId:run});
+  expect(reopened?.slug).toBe(original.slug);
+  expect(saved.slug).toBe(original.slug);
+  const restored=JSON.parse(reopened!.draftJson);
+  expect(restored.title).toBe(edited.title);
+  expect(restored.coverSubtitle).toBe(edited.coverSubtitle);
+  expect(restored.sections.map((s:{body:string})=>s.body)).toEqual(edited.sections.map(s=>s.body));
+  expect(restored).not.toHaveProperty("transcript");
+  await expect(t.query(api.storybookPages.getOwnedByRun,{runId:run})).rejects.toThrow(/Sign in/);
+  await expect(t.withIdentity({subject:`${other}|session`}).query(api.storybookPages.getOwnedByRun,{runId:run})).rejects.toThrow(/access/);
+});

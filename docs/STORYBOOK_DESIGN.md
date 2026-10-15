@@ -1,3 +1,11 @@
+## Editable generated story text — production release preparation, 2026-10-15
+
+Visible Edit story text opens a separate working copy. Regenerate storybook applies the exact title, cover/inner subtitle, dedication, chapter headings/bodies and closing note together; Cancel edits leaves the current book unchanged. Regeneration re-paginates the existing book without AI calls or credits. The shared reader offers a complete UTF-8 `.txt` download alongside PDF. Exports are hidden while text edits are open. Existing illustrations and original source artifacts stay intact.
+
+Saved books now reload their latest saved text through an owner-checked Convex query by paid run; the original checkpoint no longer overwrites saved wording. Save changes updates the same unlisted story URL. Sign-in and ownership checks reject unrelated accounts. This release is built from the exact previously live PDF-template snapshot plus text editing/downloading and the small reopening fix. Other local source-review, original-photo management, cost tracking and Interview Assist changes remain unpublished.
+
+Release checks: 79 tests pass, TypeScript/build pass, lint has no errors (three existing unused-variable warnings). BrowserOS neo verified the release's real editor/reader at desktop and 390px phone, exact English/Telugu wording, cancellation/validation/focus in earlier checks and an actual text download read back from disk. The release includes a new negative ownership/reopen test. Live account save/reopen remains to be checked with an authenticated account; no family data or generation credits are used for release tests. Production launch flag remains false. Deployment details will be recorded in `docs/PUBLISHING.md`.
+
 # Storybook redesign — 2026-10-09
 
 ## Latest cover and QR refinements — 2026-10-14

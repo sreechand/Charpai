@@ -14,7 +14,8 @@ import {
   Trash2
 } from "lucide-react";
 import Image from "next/image";
-import { StorybookReader } from "@/components/storybook-reader";
+import { StorybookEditor } from "@/components/storybook-editor";
+import {applyStoryText} from "@/lib/storybook-text";
 import { AudioIntake } from "@/components/audio-intake";
 import {
   useEffect,
@@ -36,8 +37,7 @@ import {
   demoIntake,
   emptyDraft,
   type IntakePayload,
-  type StorybookDraft,
-  type StorySection
+  type StorybookDraft
 } from "@/lib/storybook";
 
 const initialIntake: IntakePayload = {
@@ -112,6 +112,7 @@ type GenerationStageId = (typeof generationStages)[number]["id"];
 
 export function StorybookApp() {
   const evidence = useEvidence();
+  const {loadSavedBookByRun}=evidence;
   const auth = useAuthSession();
   const runIdRef = useRef<string | null>(null);
   const loadedDraftRef = useRef("");
@@ -148,6 +149,7 @@ export function StorybookApp() {
     const restore = async () => {
       generationIdRef.current = selectedGeneration.generationId;
       setActiveBookId(selectedGeneration.generationId);
+      runIdRef.current = selectedGeneration.runId;
       setSavedAudioUrl(selectedGeneration.audioUrl);
       setPhotos(selectedGeneration.photos.map(photo => ({id: photo.storageId, name: photo.fileName, url: photo.url || ""})));
       if (selectedGeneration.stage !== "ready") setGenerationStageId(selectedGeneration.stage);
@@ -169,6 +171,14 @@ export function StorybookApp() {
       const data = await response.json() as GenerateResponse | StorybookDraft;
       if (cancelled) return;
       loadedDraftRef.current = loadKey;
+      if (selectedGeneration.status === "published" && selectedGeneration.runId && "draft" in data && data.draft) {
+        const saved = await loadSavedBookByRun(selectedGeneration.runId);
+        if (cancelled) return;
+        setDraft(saved ? {...data.draft, ...saved.draft} : data.draft);
+        setPendingRecommendation(null);setStatus("ready");
+        if (saved) setPublishedStoryPath(`/s/${saved.slug}`);
+        setMessage("Your saved book is open for editing.");return;
+      }
       if (selectedGeneration.draftUrl && "draft" in data && data.draft) {
         setPendingRecommendation({intake: data.intake || JSON.parse(selectedGeneration.inputJson), draft: data.draft,
           audioStorageId: selectedGeneration.audioStorageId, model: data.model || "model", elapsedMs: data.elapsedMs || 0, warning: data.warning || ""});
@@ -177,7 +187,7 @@ export function StorybookApp() {
     };
     void restore().catch(error => { if (!cancelled) setMessage(error instanceof Error ? error.message : "Your saved draft could not be loaded."); });
     return () => { cancelled = true; };
-  }, [selectedGeneration, openDraftVersion]);
+  }, [selectedGeneration, openDraftVersion, loadSavedBookByRun]);
 
   function startNewDraft() {
     evidence.openGeneration(null); loadedDraftRef.current = ""; generationIdRef.current = undefined;
@@ -402,30 +412,23 @@ export function StorybookApp() {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function updateSection(id: string, patch: Partial<StorySection>) {
-    if (pendingRecommendation) {
-      setPendingRecommendation((current) =>
-        current
-          ? {
-              ...current,
-              draft: {
-                ...current.draft,
-                sections: current.draft.sections.map((section) =>
-                  section.id === id ? { ...section, ...patch } : section
-                )
-              }
-            }
-          : current
-      );
-      return;
-    }
+  function regenerateBook(edited: StorybookDraft) {
+    const next = applyStoryText(activeDraft, edited);
+    if (pendingRecommendation) setPendingRecommendation(current => current ? {...current,draft:next} : current);
+    else setDraft(next);
+    setMessage("Storybook regenerated with your text. Save or export the book to keep your changes.");
+    setWarning("");
+  }
 
-    setDraft((current) => ({
-      ...current,
-      sections: current.sections.map((section) =>
-        section.id === id ? { ...section, ...patch } : section
-      )
-    }));
+  async function saveEditedBook() {
+    setIsPublishing(true); setWarning("");
+    try {
+      if (!runIdRef.current) throw new Error("Open a saved storybook before saving changes.");
+      const saved=await evidence.publishStoryPage(activeDraft,runIdRef.current);
+      if (!saved) throw new Error("Your changes could not be saved. Try again.");
+      setPublishedStoryPath(`/s/${saved.slug}`);setMessage("Your edited storybook is saved.");
+    } catch(error) {setWarning(error instanceof Error ? error.message : "Your book could not be saved.");}
+    finally {setIsPublishing(false);}
   }
 
   function loadDemo() {
@@ -433,6 +436,7 @@ export function StorybookApp() {
     setPendingRecommendation(null);
     setIntake(seeded);
     setDraft(demoDraft(seeded));
+    runIdRef.current=null;setPublishedStoryPath("");
     setStatus("ready");
     setMessage("Demo preview loaded. Review the extracted fields and storybook before export.");
   }
@@ -660,9 +664,11 @@ export function StorybookApp() {
             {activeDraft.sections.length ? (
               <StorybookEditor
                 draft={activeDraft}
-                photos={photos}
-                onDraftChange={updateDraft}
-                onSectionChange={updateSection}
+                key={activeBookId || "demo"}
+                onRegenerate={regenerateBook}
+                onSave={publishedStoryPath && !hasPendingRecommendation ? saveEditedBook : undefined}
+                allowRecordingSharing={false}
+                disabled={status === "generating" || isPublishing}
                 storyUrl={hasPendingRecommendation ? undefined : publishedStoryPath}
                 allowExport={!hasPendingRecommendation}
                 onBeforeExport={handleExport}
@@ -1055,72 +1061,6 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
         ) : null}
       </div>
     </section>
-  );
-}
-
-function StorybookEditor({ draft, photos, onDraftChange, onSectionChange, storyUrl, allowExport, onBeforeExport, onAfterExport }: {
-  draft: StorybookDraft; photos: PhotoPreview[];
-  onDraftChange: (key: keyof StorybookDraft, value: string) => void;
-  onSectionChange: (id: string, patch: Partial<StorySection>) => void;
-  storyUrl?: string; allowExport: boolean; onBeforeExport: () => Promise<void>; onAfterExport: () => Promise<void>;
-}) {
-  return <>
-    <StorybookReader story={draft} storyUrl={storyUrl} showExport={allowExport} onBeforeExport={onBeforeExport} onAfterExport={onAfterExport} />
-    <details className="folio-edit-fields screen-only">
-      <summary>Edit story text</summary>
-      <label>Book title<input value={draft.title} onChange={event => onDraftChange("title", event.target.value)} /></label>
-      <label>Subtitle<input value={draft.subtitle} onChange={event => onDraftChange("subtitle", event.target.value)} /></label>
-      <label>Dedication<AutoSizeTextArea value={draft.dedication} onChange={value => onDraftChange("dedication", value)} rows={3} ariaLabel="Dedication" /></label>
-      {draft.sections.map(section => <div key={section.id}>
-        <label>Page heading<input value={section.heading} onChange={event => onSectionChange(section.id, { heading: event.target.value })} aria-label={`Heading for ${section.id}`} /></label>
-        <label>Story text<AutoSizeTextArea value={section.body} onChange={value => onSectionChange(section.id, { body: value })} rows={7} ariaLabel={`Body for ${section.id}`} /></label>
-      </div>)}
-      <label>Closing note<AutoSizeTextArea value={draft.closingNote} onChange={value => onDraftChange("closingNote", value)} rows={4} ariaLabel="Closing note" /></label>
-      {photos.length ? <section className="scrapbook-photos" aria-label="Uploaded family photos">{photos.map(photo => <figure key={photo.id}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={photo.url} alt={photo.name} />
-      </figure>)}</section> : null}
-    </details>
-  </>;
-}
-
-function AutoSizeTextArea({
-  ariaLabel,
-  className,
-  onChange,
-  rows,
-  value
-}: {
-  ariaLabel: string;
-  className?: string;
-  onChange: (value: string) => void;
-  rows: number;
-  value: string;
-}) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) {
-      return;
-    }
-
-    element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
-  }, [value]);
-
-  return (
-    <>
-    <div className={`print-text ${className || ""}`} aria-hidden="true">{value}</div>
-    <textarea
-      aria-label={ariaLabel}
-      className={className}
-      onChange={(event) => onChange(event.target.value)}
-      ref={ref}
-      rows={rows}
-      value={value}
-    />
-    </>
   );
 }
 
