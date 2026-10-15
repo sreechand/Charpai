@@ -26,7 +26,8 @@ export default defineSchema({
 
   emailNotifications: defineTable({
     key: v.string(),
-    kind: v.union(v.literal("waitlist_signup"), v.literal("account_signup"), v.literal("login"), v.literal("generation_started"), v.literal("generation_ready"), v.literal("generation_failed")),
+    kind: v.union(v.literal("waitlist_signup"), v.literal("account_signup"), v.literal("login"), v.literal("generation_started"), v.literal("generation_ready"), v.literal("generation_failed"), v.literal("payment_receipt")),
+    paymentOrderId: v.optional(v.id("paymentOrders")),
     userId: v.optional(v.id("users")),
     waitlistId: v.optional(v.id("waitlist")),
     generationId: v.optional(v.string()),
@@ -79,6 +80,24 @@ export default defineSchema({
     draftId: v.id("generationDrafts"), key: v.string(), artifactStorageId: v.id("_storage"),
     model: v.optional(v.string()), providerRequestId: v.optional(v.string()), createdAt: v.number()
   }).index("by_draftId_and_key", ["draftId", "key"]),
+
+  generationStepRuns: defineTable({
+    draftId: v.id("generationDrafts"), userId: v.id("users"), generationId: v.string(), attemptId: v.string(),
+    operation: v.string(), partIndex: v.optional(v.number()), backendUrl: v.string(),
+    status: v.union(v.literal("started"), v.literal("succeeded"), v.literal("failed"), v.literal("timed_out")),
+    createdAt: v.number(), deadlineAt: v.number(), finishedAt: v.optional(v.number()), elapsedMs: v.optional(v.number()),
+    httpStatus: v.optional(v.number()), errorCode: v.optional(v.union(v.literal("configuration"), v.literal("worker_http"), v.literal("network"), v.literal("deadline_exceeded"), v.literal("invalid_response"))),
+    appRelease: v.optional(v.string())
+  }).index("by_draftId", ["draftId"]).index("by_status_and_deadlineAt", ["status", "deadlineAt"]),
+
+  funnelEvents: defineTable({
+    eventId: v.string(), name: v.string(), source: v.union(v.literal("browser"), v.literal("server")),
+    visitId: v.optional(v.string()), attemptId: v.optional(v.string()), userId: v.optional(v.id("users")),
+    method: v.optional(v.union(v.literal("google"), v.literal("password"))), flow: v.optional(v.union(v.literal("login"), v.literal("signup"))),
+    orderId: v.optional(v.string()), elapsedMs: v.optional(v.number()), httpStatus: v.optional(v.number()), droppedEvents: v.optional(v.number()), errorCode: v.optional(v.string()), retry: v.optional(v.boolean()),
+    amount: v.optional(v.number()), expectedCredits: v.optional(v.number()), credits: v.optional(v.number()), clientAt: v.optional(v.number()), receivedAt: v.number(),
+    backendUrl: v.string(), backendRelease: v.optional(v.string()), instrumentationVersion: v.string(), paymentMode: v.union(v.literal("test"), v.literal("live"), v.literal("unknown"))
+  }).index("by_source_and_eventId", ["source", "eventId"]).index("by_visitId", ["visitId"]).index("by_userId", ["userId"]).index("by_orderId", ["orderId"]).index("by_name", ["name"]),
 
   productEvents: defineTable({
     userId: v.id("users"), name: v.string(), createdAt: v.number(),
@@ -173,6 +192,7 @@ export default defineSchema({
     status: v.union(v.literal("published"), v.literal("deleted")),
     title: v.string(),
     subtitle: v.string(),
+    coverSubtitle: v.optional(v.string()),
     dedication: v.string(),
     languageNote: v.string(),
     sections: v.array(storySection),

@@ -10,8 +10,12 @@
 
 import type * as auth from "../auth.js";
 import type * as files from "../files.js";
+import type * as funnel from "../funnel.js";
+import type * as funnelAction from "../funnelAction.js";
 import type * as generation from "../generation.js";
+import type * as generationTelemetry from "../generationTelemetry.js";
 import type * as generationWorker from "../generationWorker.js";
+import type * as generationWorkerRequest from "../generationWorkerRequest.js";
 import type * as generationWorkflow from "../generationWorkflow.js";
 import type * as http from "../http.js";
 import type * as notifications from "../notifications.js";
@@ -31,8 +35,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   files: typeof files;
+  funnel: typeof funnel;
+  funnelAction: typeof funnelAction;
   generation: typeof generation;
+  generationTelemetry: typeof generationTelemetry;
   generationWorker: typeof generationWorker;
+  generationWorkerRequest: typeof generationWorkerRequest;
   generationWorkflow: typeof generationWorkflow;
   http: typeof http;
   notifications: typeof notifications;
@@ -73,4 +81,5 @@ export declare const internal: FilterApi<
 export declare const components: {
   resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
   workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
+  funnelRateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"funnelRateLimiter">;
 };

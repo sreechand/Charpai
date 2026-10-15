@@ -82,3 +82,26 @@ test("old saved stories still resolve without new section fields", async () => {
   expect(page?.sections[0].artifactSubject).toBe("Tumbler");
   expect(page?.sections[0].illustrationUrl).toBeNull();
 });
+
+test("saving a long book retains every chapter and separates cover text from edition details", async () => {
+  const t = convexTest(schema, modules);
+  const {owner, run} = await t.run(async ctx => {
+    const owner = await ctx.db.insert("users", {});
+    const run = await ctx.db.insert("runs", {userId:owner,buyerName:"",email:"",elderName:"Test",relationship:"Parent",originPlace:"Home",languageMix:"Telugu",hasAudio:false,photoCount:0,status:"draft_ready",createdAt:1,updatedAt:1});
+    return {owner,run};
+  });
+  const {illustrationUrl,illustrationStorageId,...base} = demoDraft();
+  void illustrationUrl; void illustrationStorageId;
+  const sections = Array.from({length:23},(_,i)=>({id:`chapter-${i}`,heading:`${i}: ${"A remembered place ".repeat(12)}`,body:`${i}\n\n${"మా జ్ఞాపకాలు. ".repeat(850)}`}));
+  const draft = {...base,subtitle:"The full edition details\n4 September 2026",coverSubtitle:"నారాయణం రమాదేవి జ్ఞాపకాలు",dedication:"For the family. ".repeat(90),closingNote:"The final memory. ".repeat(90),sections};
+  expect(normalizeDraft(draft).coverSubtitle).toBe(draft.coverSubtitle);
+  const user=t.withIdentity({subject:`${owner}|session`});
+  const saved=await user.mutation(api.storybookPages.publish,{runId:run,draft});
+  expect((await user.query(api.storybookPages.listMine,{})).map(page=>page._id)).toContain(saved._id);
+  const reopened=await t.query(api.storybookPages.getPublicBySlug,{slug:saved.slug});
+  expect(reopened?.sections.map(({id,heading,body})=>({id,heading,body}))).toEqual(sections);
+  expect(reopened?.dedication).toBe(draft.dedication);
+  expect(reopened?.closingNote).toBe(draft.closingNote);
+  expect(reopened?.coverSubtitle).toBe(draft.coverSubtitle);
+  expect(reopened?.subtitle).toBe(draft.subtitle);
+});

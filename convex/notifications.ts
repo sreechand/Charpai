@@ -12,7 +12,7 @@ export function emailService() {
 
 // Event keys and recipients originate on the server, never from browser arguments.
 export async function queueNotification(ctx: MutationCtx, event: Pick<Doc<"emailNotifications">, "key" | "kind"> & {
-  userId?: Id<"users">; waitlistId?: Id<"waitlist">; generationId?: string; title?: string;
+  userId?: Id<"users">; waitlistId?: Id<"waitlist">; paymentOrderId?: Id<"paymentOrders">; generationId?: string; title?: string;
 }) {
   const existing = await ctx.db.query("emailNotifications").withIndex("by_key", q => q.eq("key", event.key)).unique();
   if (existing) return existing._id;
@@ -30,19 +30,25 @@ export const deliver = internalMutation({
     if (env.EMAIL_ENABLED !== "true" || !env.RESEND_API_KEY || !env.EMAIL_FROM || !env.EMAIL_OWNER_TO) return null;
     const user = notice.userId ? await ctx.db.get(notice.userId) : null;
     const signup = notice.waitlistId ? await ctx.db.get(notice.waitlistId) : null;
+    const payment = notice.paymentOrderId ? await ctx.db.get(notice.paymentOrderId) : null;
+    const isReceipt = notice.kind === "payment_receipt";
+    if (isReceipt && (!payment || payment.status !== "paid" || !payment.paymentId || payment.amount <= 0 || payment.parentOrderId || payment.userId !== notice.userId)) {
+      await ctx.db.patch(notificationId, { status: "skipped" }); return null;
+    }
     if ((notice.userId && !user) || (notice.waitlistId && !signup)) {
       await ctx.db.patch(notificationId, { status: "skipped" }); return null;
     }
     const ownerOnly = notice.kind === "waitlist_signup" || notice.kind === "account_signup";
     const policy = env.EMAIL_USER_EVENTS_TO || "user";
     const recipients = new Set<string>();
-    if (ownerOnly || policy === "owner" || policy === "both") recipients.add(env.EMAIL_OWNER_TO.trim().toLowerCase());
-    if (!ownerOnly && policy !== "owner" && user?.email) recipients.add(user.email.trim().toLowerCase());
+    if (ownerOnly || (!isReceipt && (policy === "owner" || policy === "both"))) recipients.add(env.EMAIL_OWNER_TO.trim().toLowerCase());
+    if (!ownerOnly && (isReceipt || policy !== "owner") && user?.email) recipients.add(user.email.trim().toLowerCase());
     if (!recipients.size) { await ctx.db.patch(notificationId, { status: "skipped" }); return null; }
     const appUrl = new URL("/app", env.SITE_URL || "https://charpai.sreechand.pm").href;
     const content = buildNotificationEmail(notice.kind, {
       name: signup?.name || user?.name, email: signup?.email || user?.email,
-      phone: signup?.phone, note: signup?.note, title: notice.title, createdAt: notice.createdAt, appUrl
+      phone: signup?.phone, note: signup?.note, title: notice.title, createdAt: payment?.paidAt || notice.createdAt, appUrl,
+      payment: isReceipt && payment ? { amount: payment.amount, currency: payment.currency, credits: payment.creditsPerPurchase || 1, orderId: payment.orderId, paymentId: payment.paymentId!, testMode: Boolean(env.RAZORPAY_KEY_ID?.startsWith("rzp_test_")) } : undefined
     });
     const service = emailService();
     const emailIds: string[] = [];
@@ -95,12 +101,17 @@ export const deliveryStatus = internalQuery({
 
 // Admin-only delivery check; no caller-supplied address or message.
 export const sendTestEmail = internalMutation({
-  args: {}, returns: v.string(),
-  handler: async (ctx) => {
+  args: { kind: v.optional(v.literal("payment_receipt")) }, returns: v.string(),
+  handler: async (ctx, { kind }) => {
     if (!env.RESEND_API_KEY || !env.EMAIL_FROM || !env.EMAIL_OWNER_TO) throw new Error("Connect the Resend key, sender and owner email first.");
+    const receipt = kind ? buildNotificationEmail("payment_receipt", {
+      createdAt: Date.now(), appUrl: new URL("/app", env.SITE_URL || "https://charpai.sreechand.pm").href,
+      payment: { amount: 20000, currency: "INR", credits: 4, orderId: "order_example", paymentId: "pay_example", testMode: true }
+    }) : null;
     return await emailService().sendEmail(ctx, {
-      from: env.EMAIL_FROM, to: env.EMAIL_OWNER_TO, subject: "Charpai email setup check",
+      from: env.EMAIL_FROM, to: env.EMAIL_OWNER_TO, replyTo: [env.EMAIL_OWNER_TO], subject: "Charpai email setup check",
       text: "Charpai's email service is connected. This is a setup check for signup alerts, login alerts and story-generation updates.",
+      ...receipt,
       idempotencyKey: `setup-check:${Date.now()}`
     });
   }

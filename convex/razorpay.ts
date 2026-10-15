@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { ConvexError, v } from "convex/values";
 import { action, env } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { contextFields, journeyContext } from "./funnel";
+import { tracePayment, safeFunnelWrite } from "./funnelAction";
 import { validPaymentSignature } from "../lib/payment-signature";
 
 function client() {
@@ -21,9 +23,8 @@ function providerError(error: unknown): never {
 }
 
 export const checkoutDetails = action({
-  args: {}, returns: v.object({ amount: v.union(v.number(), v.null()), currency: v.string(), testMode: v.boolean() }),
-  handler: async (ctx): Promise<{ amount: number | null; currency: string; testMode: boolean }> => {
-    const userId = await ctx.runQuery(internal.payments.identity, {});
+  args: contextFields, returns: v.object({ amount: v.union(v.number(), v.null()), currency: v.string(), testMode: v.boolean() }),
+  handler: async (ctx, args): Promise<{ amount: number | null; currency: string; testMode: boolean }> => tracePayment(ctx, args, "details", async userId => {
     if (!userId) throw new ConvexError({ status: 401, message: "Sign in before paying." });
     const pending = await ctx.runQuery(internal.payments.pendingOrders, { userId });
     if (pending.length) {
@@ -32,20 +33,22 @@ export const checkoutDetails = action({
         const payments = await razorpay.orders.fetchPayments(order.orderId).catch(providerError);
         const captured = payments.items.find(payment => payment.status === "captured" &&
           payment.order_id === order.orderId && Number(payment.amount) === order.amount && payment.currency === order.currency);
-        if (captured) await ctx.runMutation(internal.payments.markPaid, { userId, orderId: order.orderId, paymentId: captured.id });
+        if (captured) {
+          await ctx.runMutation(internal.payments.markPaid, { userId, orderId: order.orderId, paymentId: captured.id });
+          await safeFunnelWrite(ctx, {...journeyContext(args), eventId: `recovered:${order.orderId}`, name: "payment_recovered", userId, orderId: order.orderId});
+        }
       }
     }
     const amount = Number(env.RAZORPAY_AMOUNT_PAISE);
     return { amount: env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET && Number.isSafeInteger(amount) && amount >= 100 ? amount : null,
       currency: "INR", testMode: Boolean(env.RAZORPAY_KEY_ID?.startsWith("rzp_test_")) };
-  }
+  })
 });
 
 export const createOrder = action({
-  args: {},
+  args: contextFields,
   returns: v.object({ order_id: v.string(), amount: v.number(), currency: v.string(), key_id: v.string() }),
-  handler: async (ctx): Promise<{ order_id: string; amount: number; currency: string; key_id: string }> => {
-    const userId = await ctx.runQuery(internal.payments.identity, {});
+  handler: async (ctx, args): Promise<{ order_id: string; amount: number; currency: string; key_id: string }> => tracePayment(ctx, args, "order", async userId => {
     if (!userId) throw new ConvexError({ status: 401, message: "Sign in before paying." });
     const amount = Number(env.RAZORPAY_AMOUNT_PAISE);
     if (!Number.isSafeInteger(amount) || amount < 100) {
@@ -56,16 +59,15 @@ export const createOrder = action({
     if (Number(order.amount) !== amount || order.currency !== "INR") {
       throw new ConvexError({ status: 500, message: "Razorpay returned an unexpected order." });
     }
-    await ctx.runMutation(internal.payments.saveOrder, { userId, orderId: order.id, amount, currency: "INR", creditsPerPurchase: 4 });
+    await ctx.runMutation(internal.payments.saveOrder, { userId, orderId: order.id, amount, currency: "INR", creditsPerPurchase: 4, ...journeyContext(args) });
     return { order_id: order.id, amount, currency: "INR", key_id: env.RAZORPAY_KEY_ID! };
-  }
+  })
 });
 
 export const verifyPayment = action({
-  args: { razorpay_payment_id: v.string(), razorpay_order_id: v.string(), razorpay_signature: v.string() },
+  args: { razorpay_payment_id: v.string(), razorpay_order_id: v.string(), razorpay_signature: v.string(), ...contextFields },
   returns: v.object({ success: v.boolean(), order_id: v.string() }),
-  handler: async (ctx, args): Promise<{ success: boolean; order_id: string }> => {
-    const userId = await ctx.runQuery(internal.payments.identity, {});
+  handler: async (ctx, args): Promise<{ success: boolean; order_id: string }> => tracePayment(ctx, args, "verification", async userId => {
     if (!userId) throw new ConvexError({ status: 401, message: "Sign in before verifying payment." });
     if (!args.razorpay_payment_id || !args.razorpay_order_id || !args.razorpay_signature) {
       throw new ConvexError({ status: 400, message: "All payment verification fields are required." });
@@ -86,5 +88,5 @@ export const verifyPayment = action({
     }
     await ctx.runMutation(internal.payments.markPaid, { userId, orderId: order.orderId, paymentId: payment.id });
     return { success: true, order_id: order.orderId };
-  }
+  })
 });

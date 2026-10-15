@@ -1,10 +1,12 @@
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
 import workflow from "@convex-dev/workflow/convex.config.js";
+import funnelRateLimiter from "@convex-dev/rate-limiter/convex.config.js";
 import resend from "@convex-dev/resend/convex.config.js";
 
 const app = defineApp({
   env: {
+    FUNNEL_RELEASE: v.optional(v.string()),
     GENERATION_WORKER_URL: v.optional(v.string()),
     GENERATION_BACKEND_URL: v.optional(v.string()),
     PAYMENT_BACKEND_TOKEN: v.optional(v.string()),
@@ -26,5 +28,6 @@ const app = defineApp({
 });
 app.use(resend);
 app.use(workflow);
+app.use(funnelRateLimiter, { name: "funnelRateLimiter" });
 
 export default app;

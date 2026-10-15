@@ -17,6 +17,8 @@ import {
 } from "@convex-dev/auth/react";
 import { ConvexReactClient, useMutation, useQuery } from "convex/react";
 
+import {JourneyProvider, useJourney} from "@/components/journey-provider";
+import {funnelErrorCode} from "@/lib/funnel-events";
 import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -77,7 +79,7 @@ type EvidenceContextValue = {
 type AuthContextValue = {
   status: "loading" | "authenticated" | "unauthenticated" | "unavailable";
   authToken: string | null;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (flow?: "login" | "signup") => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -100,9 +102,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <ConvexAuthProvider client={convexClient}>
-      <ConvexAuthBridge>
+      <JourneyProvider><ConvexAuthBridge>
         <ConvexEvidenceProvider>{children}</ConvexEvidenceProvider>
-      </ConvexAuthBridge>
+      </ConvexAuthBridge></JourneyProvider>
     </ConvexAuthProvider>
   );
 }
@@ -127,34 +129,32 @@ function ConvexAuthBridge({ children }: { children: ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const authToken = useAuthToken();
   const { signIn, signOut } = useAuthActions();
+  const journey=useJourney();
 
   const value = useMemo<AuthContextValue>(
     () => ({
       status: isLoading ? "loading" : isAuthenticated ? "authenticated" : "unauthenticated",
       authToken,
-      signInWithGoogle: async () => {
-        const result = await signIn("google", { redirectTo: "/app" });
-        if (result.redirect) {
-          window.location.href = result.redirect.toString();
-        }
+      signInWithGoogle: async (flow="login") => {
+        const context=journey.startAuth("google",flow);
+        try {
+          const result = await signIn("google", { redirectTo: "/app" });
+          if (result.redirect) {journey.track("auth_redirect_started",context);window.location.href = result.redirect.toString();}
+        } catch(error) {journey.track("auth_failed",{...context,errorCode:funnelErrorCode(error)});journey.clearAuth();throw error;}
       },
       signInWithEmail: async (email, password) => {
-        await signIn("password", {
-          flow: "signIn",
-          email: email.trim().toLowerCase(),
-          password
-        });
+        const context=journey.startAuth("password","login");
+        try {await signIn("password", {flow:"signIn",email:email.trim().toLowerCase(),password,telemetryVisitId:context.visitId,telemetryAttemptId:context.attemptId});}
+        catch(error) {journey.track("auth_failed",{...context,errorCode:funnelErrorCode(error),elapsedMs:Date.now()-context.startedAt});journey.clearAuth();throw error;}
       },
       signUpWithEmail: async (email, password) => {
-        await signIn("password", {
-          flow: "signUp",
-          email: email.trim().toLowerCase(),
-          password
-        });
+        const context=journey.startAuth("password","signup");
+        try {await signIn("password", {flow:"signUp",email:email.trim().toLowerCase(),password,telemetryVisitId:context.visitId,telemetryAttemptId:context.attemptId});}
+        catch(error) {journey.track("auth_failed",{...context,errorCode:funnelErrorCode(error),elapsedMs:Date.now()-context.startedAt});journey.clearAuth();throw error;}
       },
-      signOut
+      signOut: async()=>{journey.track("logout_started");try {await signOut();journey.track("logout_succeeded");journey.resetVisit();}catch(error){journey.track("logout_failed",{errorCode:funnelErrorCode(error)});throw error;}}
     }),
-    [authToken, isAuthenticated, isLoading, signIn, signOut]
+    [authToken, isAuthenticated, isLoading, signIn, signOut, journey]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

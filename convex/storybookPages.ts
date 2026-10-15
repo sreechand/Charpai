@@ -26,6 +26,7 @@ const charpaiDraftDesign = v.object({
 const storybookDraft = v.object({
   title: v.string(),
   subtitle: v.string(),
+  coverSubtitle: v.optional(v.string()),
   dedication: v.string(),
   languageNote: v.string(),
   sections: v.array(storySection),
@@ -50,6 +51,7 @@ const publicStorybookPage = v.object({
   slug: v.string(),
   title: v.string(),
   subtitle: v.string(),
+  coverSubtitle: v.optional(v.string()),
   dedication: v.string(),
   languageNote: v.string(),
   sections: v.array(publicStorySection),
@@ -263,18 +265,19 @@ function slugPrefix(title: string) {
 function sanitizeDraft(draft: Infer<typeof storybookDraft>) {
   return {
     title: limitText(draft.title, 160) || "Untitled Charpai Story",
-    subtitle: limitText(draft.subtitle, 220),
-    dedication: limitText(draft.dedication, 600),
+    subtitle: draft.subtitle,
+    ...(draft.coverSubtitle !== undefined ? {coverSubtitle: draft.coverSubtitle} : {}),
+    dedication: draft.dedication,
     languageNote: limitText(draft.languageNote, 500),
-    sections: draft.sections.slice(0, 5).map((section, index) => ({
+    sections: draft.sections.map((section, index) => ({
       id: limitText(section.id, 48) || `section-${index + 1}`,
-      heading: limitText(section.heading, 140),
-      body: limitText(section.body, 8000),
+      heading: section.heading,
+      body: section.body,
       artifactSubject: limitText(section.artifactSubject || "", 180),
       artifactBrief: limitText(section.artifactBrief || "", 500),
       illustrationStorageId: section.illustrationStorageId
     })),
-    closingNote: limitText(draft.closingNote, 900),
+    closingNote: draft.closingNote,
     illustrationBrief: limitText(draft.illustrationBrief, 500),
     stampSubject: limitText(draft.stampSubject, 180),
     stampMotifs: draft.stampMotifs.map((motif) => limitText(motif, 80)).filter(Boolean).slice(0, 6),
@@ -303,6 +306,7 @@ async function toPublicPage(ctx: MutationCtx | QueryCtx, page: {
   slug: string;
   title: string;
   subtitle: string;
+  coverSubtitle?: string;
   dedication: string;
   languageNote: string;
   sections: Array<{ id: string; heading: string; body: string; artifactSubject?: string; artifactBrief?: string; illustrationStorageId?: Id<"_storage"> }>;
@@ -332,6 +336,7 @@ async function toPublicPage(ctx: MutationCtx | QueryCtx, page: {
     slug: page.slug,
     title: page.title,
     subtitle: page.subtitle,
+    ...(page.coverSubtitle !== undefined ? {coverSubtitle: page.coverSubtitle} : {}),
     dedication: page.dedication,
     languageNote: page.languageNote,
     sections: await Promise.all(page.sections.map(async (section, index) => ({

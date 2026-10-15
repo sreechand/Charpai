@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, env } from "./_generated/server";
 
+import { contextFields, journeyContext, writeConfirmed } from "./funnel";
 import schema from "./schema";
 import { queueNotification } from "./notifications";
 
@@ -13,7 +14,7 @@ export const identity = internalQuery({
 });
 
 export const saveOrder = internalMutation({
-  args: { userId: v.id("users"), orderId: v.string(), amount: v.number(), currency: v.string(), creditsPerPurchase: v.optional(v.number()) },
+  args: { userId: v.id("users"), orderId: v.string(), amount: v.number(), currency: v.string(), creditsPerPurchase: v.optional(v.number()), ...contextFields },
   returns: v.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("paymentOrders").withIndex("by_order_id", q => q.eq("orderId", args.orderId)).unique();
@@ -23,7 +24,9 @@ export const saveOrder = internalMutation({
       }
       return null;
     }
-    await ctx.db.insert("paymentOrders", { ...args, status: "created", createdAt: Date.now() });
+    const {visitId, attemptId, ...order} = args;
+    await ctx.db.insert("paymentOrders", { ...order, status: "created", createdAt: Date.now() });
+    try { await writeConfirmed(ctx, {...journeyContext({visitId, attemptId}), eventId: `order:${args.orderId}`, name: "order_created", userId: args.userId, orderId: args.orderId, amount: args.amount, expectedCredits: args.creditsPerPurchase || 1}); } catch { console.error("funnel_write_failed:order_created"); }
     return null;
   }
 });
@@ -66,6 +69,10 @@ export const markPaid = internalMutation({
         status: "paid", paymentId: args.paymentId, createdAt: paidAt, paidAt
       });
     }
+    try { await writeConfirmed(ctx, {eventId: `credits:${order.orderId}`, name: "credits_granted", userId: order.userId, orderId: order.orderId, amount: order.amount, expectedCredits: order.creditsPerPurchase || 1, credits: order.creditsPerPurchase || 1}); } catch { console.error("funnel_write_failed:credits_granted"); }
+    if (order.amount > 0 && !order.parentOrderId) await queueNotification(ctx, {
+      key: `payment_receipt:${order.orderId}`, kind: "payment_receipt", userId: order.userId, paymentOrderId: order._id
+    });
     return null;
   }
 });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
-import { paymentClient, paymentError } from "@/lib/payment-route";
+import { paymentClient, paymentError, paymentJourney } from "@/lib/payment-route";
 
 export const runtime = "nodejs";
 
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "All three payment verification fields are required." }, { status: 400 });
     }
     return NextResponse.json(await client.action(api.razorpay.verifyPayment, {
+      ...paymentJourney(request),
       razorpay_payment_id: fields.razorpay_payment_id as string,
       razorpay_order_id: fields.razorpay_order_id as string,
       razorpay_signature: fields.razorpay_signature as string

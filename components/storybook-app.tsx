@@ -24,6 +24,7 @@ import {
   type FormEvent
 } from "react";
 
+import {useJourney} from "./journey-provider";
 import { useAuthSession, useEvidence, type StorybookPageSummary, type SavedGeneration } from "@/app/providers";
 import { RazorpayCheckout } from "@/components/razorpay-checkout";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -904,6 +905,7 @@ function formatStoryDate(timestamp: number) {
 }
 
 function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
+  const journey=useJourney();
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -918,7 +920,7 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
     setNeedsAccount(false);
     setIsSubmitting(true);
     try {
-      await auth.signInWithGoogle();
+      await auth.signInWithGoogle(mode === "signUp" ? "signup" : "login");
     } catch {
       setAuthMessage("Google sign-in could not start. Please try again.");
     } finally {
@@ -977,7 +979,7 @@ function AuthGate({ auth }: { auth: ReturnType<typeof useAuthSession> }) {
           <span>Email</span>
         </div>
 
-        <form className="auth-form" onSubmit={handleEmailSubmit}>
+        <form className="auth-form" onSubmit={handleEmailSubmit} onInvalid={() => journey.track("auth_failed",{method:"password",flow:mode==="signUp"?"signup":"login",errorCode:"invalid_input"})}>
           <label className="field">
             <span>Email</span>
             <input

@@ -1641,85 +1641,138 @@ textarea {
 .purchase-onboarding > p { line-height: 1.6; }
 .purchase-onboarding .payment-panel { margin: 24px 0; }
 
-/* One forest-green ink on warm paper; a cloth-bound family keepsake. */
-.folio-reader { --folio-ink: #264c3e; --folio-paper: #f2eee3; color: var(--folio-ink); min-width: 0; width: 100%; container-type: inline-size; }
+/* A cloth-bound family book: full cover, front matter, contents and chapter openers. */
+.folio-reader { --folio-ink: var(--ink); --folio-paper: var(--paper); --folio-accent: var(--testcard); color: var(--folio-ink); min-width: 0; width: 100%; container-type: inline-size; }
+.folio-reader[data-story-script="telugu"], .folio-measure[data-story-script="telugu"] { --font-story: "Telugu MN", "Noto Serif Telugu", Georgia, serif; }
 .storybook-page:has(.folio-reader) { display: block; }
-.folio-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 0 0 20px; font: 13px var(--font-ui); }
-.folio-export { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #728783; padding: 10px 16px; border-radius: 5px; background: var(--folio-paper); color: var(--folio-ink); font: 14px var(--font-ui); cursor: pointer; }
+.folio-toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-object); margin-bottom: var(--space-thought); font: 13px/1.5 var(--font-ui); }
+.folio-export { display: inline-flex; align-items: center; gap: var(--space-touch); border: 1px solid var(--line-strong); padding: 10px 14px; border-radius: var(--radius-small); background: var(--folio-paper); color: var(--folio-ink); font: 650 14px/1.4 var(--font-ui); min-height: 44px; cursor: pointer; }
 .folio-export:disabled { opacity: .5; cursor: wait; }
-.folio-unsaved, .folio-export-error { font: 13px/1.6 var(--font-ui); margin: 0 0 16px; }
-.folio-export-error { color: #9c3829; }
-.folio-stage { display: flex; align-items: stretch; max-width: 1280px; margin: 0 auto; border-radius: 3px; box-shadow: 0 18px 48px #264c3e20, 4px 2px 0 #e5e0d4, 7px 4px 0 #c2c4b5; }
+.folio-unsaved, .folio-export-error { font: 13px/1.6 var(--font-ui); margin: 0 0 var(--space-object); }
+.folio-export-error { color: var(--danger); }
+.folio-stage { display: flex; align-items: stretch; max-width: 1280px; margin: 0 auto; border-radius: 2px; box-shadow: var(--shadow-lifted); }
 .folio-stage.folio-closed { max-width: 640px; }
-.folio-page { position: relative; box-sizing: border-box; flex: 1 1 0; min-width: 0; background: var(--folio-paper); padding: 48px; color: var(--folio-ink); font-family: Georgia, "Times New Roman", serif; }
+.folio-spread-viewport { width: 100%; max-width: 1280px; margin-inline: auto; }
+.folio-spread-viewport.is-spread { position: relative; height: calc(908px * var(--book-scale)); }
+.folio-spread-viewport.is-spread .folio-stage { position: absolute; top: 0; left: 0; width: 1280px; height: 908px; transform: scale(var(--book-scale)); transform-origin: top left; }
+.folio-spread-viewport.is-spread .folio-page { width: 640px; height: 908px; flex: 0 0 640px; }
+
+.folio-page { position: relative; box-sizing: border-box; flex: 1 1 0; min-width: 0; background: var(--folio-paper); padding: 48px; color: var(--folio-ink); font-family: var(--font-story); }
 .folio-stage .folio-page { min-height: 908px; }
-.folio-stage .folio-illustration-page + .folio-story-page { box-shadow: inset 20px 0 24px -24px #264c3e75; }
-.folio-cover { display: grid; grid-template-columns: 38% 62%; padding: 0; overflow: hidden; background: #dcdcc8; }
-.folio-cover-panel { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 62px 25px 48px 31px; color: #f2eee3; background-color: #264c3e; background-image: repeating-linear-gradient(0deg, #ffffff04 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, #00000009 0 1px, transparent 1px 3px); box-shadow: inset 13px 0 15px -12px #00000070, inset 2px 0 0 #ffffff18; z-index: 1; }
-.folio-cover-title { margin: 58px 0 auto; }
-.folio-cover h2 { margin: 0; font: 600 27px/1.24 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
-.folio-cover-subtitle { margin: 24px 0; font: 17px/1.55 var(--font-ui); }
-.folio-cover-credit { margin-top: 32px; }
-.folio-cover-dedication { margin: 0 0 30px; font: 13px/1.6 var(--font-ui); }
-.folio-cover-logo { display: block; width: 150px; max-width: 100%; height: auto; }
-.folio-cover-art { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; background: #e3e3cf; }
-.folio-cover-image { display: block; width: 140%; max-width: none; height: 100%; object-fit: cover; }
-.folio-cover-emblem { font: italic 180px/1 Georgia, serif; color: var(--folio-ink); }
-.folio-cover-compact h2 { font-size: 20px; }
-.folio-cover-compact .folio-cover-title { margin-top: 36px; }
-.folio-cover-compact .folio-cover-subtitle { font-size: 14px; }
+.folio-stage .folio-page + .folio-page { box-shadow: inset 20px 0 24px -24px rgba(36,31,27,.3); }
+.folio-book-label { font: 11px/1.5 var(--font-ui); letter-spacing: .18em; text-transform: uppercase; margin: 0; }
+.folio-book-logo { display: block; width: 160px; max-width: 100%; height: auto; object-fit: contain; }
+.folio-book-logo-light { filter: brightness(0) invert(1); opacity: .85; }
+.folio-cover, .folio-back-cover, .folio-chapter-opening { color: var(--folio-paper); background-color: var(--folio-accent); }
+.folio-cover, .folio-back-cover { padding: 0; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, rgba(0,0,0,.025) 0 1px, transparent 1px 4px); }
+.folio-cover-frame, .folio-back-frame { position: absolute; inset: 24px; border: 1px solid color-mix(in srgb, var(--paper-edge) 65%, transparent); padding: 48px 32px; display: flex; flex-direction: column; align-items: center; gap: var(--space-thought); text-align: center; }
+.folio-cover-medallion { display: grid; place-items: center; width: 240px; height: 240px; max-width: 100%; border-radius: 50%; padding: 24px; background: var(--folio-paper); margin-top: var(--space-object); }
+.folio-cover-medallion img { width: 100%; height: 100%; object-fit: contain; }
+.folio-cover-title { width: 100%; margin: auto 0; overflow-wrap: anywhere; }
+.folio-cover h2 { margin: 0; font: 400 48px/1.12 var(--font-story); text-wrap: balance; }
+.folio-cover-title > p { font: 18px/1.5 var(--font-story); margin: var(--space-object) 0 0; white-space: pre-line; }
+.folio-cover-compact h2 { font-size: 34px; }
+.folio-cover-compact .folio-cover-medallion { width: 176px; height: 176px; }
+.folio-cover-compact .folio-cover-title > p { font-size: 16px; }
+.folio-cover-rule, .folio-chapter-rule { width: 72px; height: 1px; background: currentColor; opacity: .6; margin: 80px auto; }
+.folio-cover .folio-book-logo { margin-top: auto; width: 140px; }
 .folio-ink-defs { position: absolute; pointer-events: none; }
+.folio-imprint-page { display: flex; align-items: flex-end; justify-content: center; }
+.folio-imprint-page > div { max-width: 330px; text-align: center; margin-bottom: 48px; }
+.folio-imprint-page .folio-book-logo { width: 120px; margin: 0 auto var(--space-thought); }
+.folio-imprint-page p { font: 12px/1.7 var(--font-ui); color: var(--ink-soft); margin: var(--space-object) 0 0; }
+.folio-title-page { display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; gap: 48px; padding-block: 96px; }
+.folio-title-page > div { width: 100%; overflow-wrap: anywhere; }
+.folio-title-page h2 { margin: 0; font: 400 48px/1.16 var(--font-story); text-wrap: balance; }
+.folio-title-compact h2 { font-size: 34px; }
+.folio-title-subtitle { margin-top: var(--space-thought); font: 20px/1.5 var(--font-story); white-space: pre-line; }
+.folio-title-rule { display: block; width: 72px; height: 1px; background: currentColor; opacity: .5; margin: 48px auto; }
+.folio-dedication-page { display: flex; align-items: center; justify-content: center; text-align: center; }
+.folio-dedication-page > div { width: 100%; }
+.folio-dedication-page .folio-book-label { margin-bottom: var(--space-thought); color: var(--ink-soft); }
+.folio-dedication-copy, .folio-measure-dedication { font: italic 22px/1.6 var(--font-story); white-space: pre-wrap; overflow-wrap: anywhere; }
+.folio-dedication-copy p, .folio-measure-dedication p { margin: 0 0 var(--space-object); }
+.folio-dedication-copy p:last-child, .folio-measure-dedication p:last-child { margin-bottom: 0; }
+.folio-contents-page h2 { margin: 16px 0 48px; font: 400 36px/1.2 var(--font-story); }
+.folio-contents-page h2 > small { display: block; font: 12px/1.5 var(--font-ui); margin-top: var(--space-touch); color: var(--ink-soft); }
+.folio-contents-list { list-style: none; padding: 0; margin: 0; font: 20px/1.45 var(--font-story); }
+.folio-contents-list li { margin: 0; padding-bottom: 24px; }
+.folio-contents-list a { display: flex; gap: 32px; justify-content: space-between; align-items: flex-end; color: inherit; text-decoration: none; min-height: 44px; }
+.folio-contents-list a > span:first-child { flex: 1; min-width: 0; }
+.folio-contents-list a > span > span { display: block; overflow-wrap: anywhere; }
+.folio-contents-list small { display: block; font: 10px/1.5 var(--font-ui); text-transform: uppercase; letter-spacing: .12em; color: var(--ink-soft); margin-bottom: var(--space-touch); }
+.folio-contents-number { width: 32px; flex: 0 0 32px; text-align: right; font-variant-numeric: tabular-nums; }
+.folio-contents-list a:hover { color: var(--folio-accent); }
+.folio-contents-list a:focus-visible { outline: 2px solid var(--penblue); outline-offset: 4px; }
+.folio-chapter-opening { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 48px; text-align: center; }
+.folio-chapter-art { width: 240px; height: 240px; max-width: 100%; border-radius: 50%; padding: 24px; background: var(--folio-paper); margin: 0; }
+.folio-chapter-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.folio-chapter-opening h2 { margin: 0; font: 400 36px/1.2 var(--font-story); text-wrap: balance; overflow-wrap: anywhere; }
+.folio-running-head, .folio-measure-heading { font: 12px/1.5 var(--font-ui); text-align: center; letter-spacing: .04em; overflow-wrap: anywhere; }
+.folio-running-head { margin-bottom: var(--space-thought); padding-bottom: var(--space-object); border-bottom: 1px solid var(--ink-rule); }
+.folio-prose, .folio-measure { font: 21px/1.55 var(--font-story); white-space: pre-wrap; overflow-wrap: anywhere; text-align: justify; }
+.folio-prose p, .folio-measure p { margin: 0 0 16px; }
+.folio-prose p:last-child, .folio-measure p:last-child { margin-bottom: 0; }
+.folio-opening-paragraph::first-letter { float: left; font: 62px/.85 var(--font-story); padding: 5px 8px 0 0; color: var(--folio-accent); }
+.folio-page .source-time, .folio-measure .source-time { color: var(--ink-soft); font-size: 11px; line-height: 1.6; margin-top: 8px; }
+.folio-page footer { position: absolute; bottom: 26px; left: 48px; right: 48px; display: flex; align-items: flex-end; justify-content: space-between; font: 11px/18px var(--font-ui); }
+.folio-back-frame { justify-content: center; }
+.folio-back-frame h2 { max-width: 100%; overflow-wrap: anywhere; margin: 0; font: 400 32px/1.3 var(--font-story); }
+.folio-back-brand { position: absolute; bottom: 48px; left: 32px; right: 32px; display: flex; flex-direction: column; align-items: center; gap: var(--space-object); }
+.folio-back-brand .folio-book-logo { width: 160px; }
+.folio-back-website { max-width: 100%; color: inherit; font: 12px/1.5 var(--font-ui); text-decoration: none; overflow-wrap: anywhere; }
+.folio-back-website:focus-visible { outline: 2px solid var(--paper); outline-offset: 4px; }
 .folio-qr { display: block; width: 62px; height: 62px; flex-shrink: 0; }
 .folio-qr svg { display: block; width: 100%; height: 100%; }
 .folio-story-qr-header { display: flex; justify-content: flex-end; height: 62px; margin-bottom: 20px; }
-.folio-page h3 { margin: 0 0 20px; text-align: center; font: italic 400 28px/1.2 Georgia, serif; overflow-wrap: anywhere; }
-.folio-illustration-page { display: flex; align-items: center; justify-content: center; }
-.folio-artifact { width: 100%; margin: 0; text-align: center; }
-.folio-artifact img { display: block; height: 620px; width: 100%; object-fit: contain; }
-.folio-artifact figcaption { margin: 8px 0 0; min-height: 18px; font: 11px/18px var(--font-ui); }
-.folio-prose, .folio-measure { font: 21px/1.5 Georgia, "Times New Roman", serif; white-space: pre-wrap; overflow-wrap: anywhere; text-align: justify; }
-.folio-prose p, .folio-measure p { margin: 0 0 12px; text-indent: 1.3em; }
-.folio-prose p:last-child, .folio-measure p:last-child { margin-bottom: 0; }
-.folio-page footer { position: absolute; bottom: 26px; left: 48px; right: 48px; display: flex; align-items: flex-end; justify-content: space-between; font: 11px/18px var(--font-ui); }
-.folio-navigation { display: flex; justify-content: center; align-items: center; gap: 24px; margin: 24px 0 0; font: 12px var(--font-ui); }
-.folio-navigation button { display: grid; place-items: center; width: 48px; height: 48px; background: var(--folio-paper); color: var(--folio-ink); border: 1px solid #a9b9b2; border-radius: 4px; cursor: pointer; }
-.folio-navigation svg { width: 32px; height: 32px; }
+.folio-navigation { display: flex; justify-content: center; align-items: center; gap: var(--space-thought); margin: var(--space-thought) 0 0; font: 12px/1.5 var(--font-ui); }
+.folio-navigation button { display: grid; place-items: center; width: 48px; height: 48px; min-height: 44px; background: var(--folio-paper); color: var(--folio-ink); border: 1px solid var(--line-strong); border-radius: var(--radius-small); cursor: pointer; }
+.folio-navigation svg { width: 24px; height: 24px; }
 .folio-navigation button:disabled { opacity: .3; cursor: default; }
-.folio-reader button:focus-visible, .folio-qr:focus-visible { outline: 3px solid #264c3e; outline-offset: 4px; }
+.folio-reader button:focus-visible, .folio-qr:focus-visible { outline: 2px solid var(--penblue); outline-offset: 3px; }
 .folio-export-pages { position: fixed; left: -100000px; top: 0; width: 640px; pointer-events: none; }
 .folio-export-pages .folio-page { padding: 48px; width: 640px; height: 908px; min-height: 908px; overflow: hidden; }
-.folio-export-pages .folio-cover { padding: 0; }
-.folio-back-cover { background: var(--folio-paper); }
-.folio-back-cover-pattern { position: absolute; top: 0; left: 0; width: 100%; height: 75%; background-color: #264c3e; background-image: repeating-linear-gradient(0deg, #ffffff04 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, #00000009 0 1px, transparent 1px 3px); }
-.folio-back-cover-logo { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); display: block; width: 220px; height: auto; }
+.folio-export-pages .folio-cover, .folio-export-pages .folio-back-cover { padding: 0; }
+.folio-export-pages .folio-title-page { padding-block: 96px; }
 .folio-measure { position: fixed; top: 0; left: -100000px; width: 544px; margin: 0; padding: 0; box-sizing: border-box; }
-.folio-measure-heading { font: italic 400 28px/1.2 Georgia, serif; }
-.folio-public-shell { max-width: 1440px; padding: 32px 40px 52px; margin: 0 auto; background: #e5e2d9; }
-.folio-public-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; font: 12px var(--font-ui); color: #264c3e; }
-.folio-public-header a { font: 26px Georgia, serif; color: #264c3e; text-decoration: none; }
-.folio-edit-fields { margin-top: 32px; padding: 24px; border: 1px solid var(--line); background: #fff; }
+.folio-measure.folio-measure-heading { font: 12px/1.5 var(--font-ui); }
+.folio-measure.folio-measure-dedication { font: italic 22px/1.6 var(--font-story); }
+.folio-measure.folio-measure-toc-heading { width: 480px; font: 20px/1.45 var(--font-story); text-align: left; }
+.folio-public-shell { max-width: 1440px; padding: 32px 40px 52px; margin: 0 auto; background: var(--paper-deep); }
+.folio-public-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-thought); font: 12px/1.5 var(--font-ui); color: var(--ink-soft); }
+.folio-public-header a { font: 26px var(--font-story); color: var(--folio-ink); text-decoration: none; }
+.folio-edit-fields { margin-top: var(--space-thought); padding: var(--space-thought); border: 1px solid var(--line); background: var(--paper); }
 .folio-edit-fields summary { cursor: pointer; font: 16px var(--font-ui); }
-.folio-edit-fields label { display: block; margin-top: 20px; font: 13px var(--font-ui); }
-.folio-edit-fields input, .folio-edit-fields textarea { display: block; width: 100%; box-sizing: border-box; margin: 8px 0; padding: 10px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink); background: #fff; font: 18px/1.5 Georgia, serif; }
+.folio-edit-fields label { display: block; margin-top: var(--space-object); font: 13px var(--font-ui); }
+.folio-edit-fields input, .folio-edit-fields textarea { display: block; width: 100%; box-sizing: border-box; margin-top: var(--space-touch); padding: var(--space-object); border: 1px solid var(--line); border-radius: var(--radius-small); color: var(--ink); background: var(--paper-deep); font: 18px/1.5 var(--font-story); }
 .folio-edit-fields textarea { min-height: 130px; }
-@container (max-width: 1279px) {
+@container (max-width: 759px) {
   .folio-stage { flex-direction: column; max-width: 640px; }
-  .folio-stage .folio-page { flex: 0 0 auto; padding: 32px 24px 116px; min-height: 0; }
-  .folio-stage .folio-cover { padding: 0; min-height: 650px; }
-  .folio-stage .folio-back-cover { min-height: 650px; }
-  .folio-stage .folio-illustration-page { min-height: 540px; }
-  .folio-stage .folio-cover-panel { padding: 35px 14px 30px 20px; }
-  .folio-stage .folio-cover h2 { font-size: 20px; }
-  .folio-stage .folio-cover-subtitle { font-size: 13px; }
-  .folio-stage .folio-cover-dedication { font-size: 11px; }
-  .folio-stage .folio-cover-title { margin-top: 35px; }
-  .folio-stage .folio-prose { font-size: 20px; line-height: 1.55; text-align: left; }
-  .folio-stage .folio-artifact img { height: 400px; }
+  .folio-stage .folio-page { flex: 0 0 auto; padding: 32px 24px 80px; min-height: 0; }
+  .folio-stage .folio-cover, .folio-stage .folio-back-cover { padding: 0; min-height: 760px; }
+  .folio-stage .folio-cover-frame, .folio-stage .folio-back-frame { inset: 16px; padding: 32px 24px; gap: 24px; }
+  .folio-stage .folio-cover h2 { font-size: 36px; }
+  .folio-stage .folio-cover-compact h2 { font-size: 28px; }
+  .folio-stage .folio-cover-title > p { font-size: 16px; }
+  .folio-stage .folio-cover-medallion { width: 192px; height: 192px; }
+  .folio-stage .folio-cover-compact .folio-cover-medallion { width: 144px; height: 144px; }
+  .folio-stage .folio-imprint-page { min-height: 400px; }
+  .folio-stage .folio-title-page { min-height: 650px; padding-block: 64px; }
+  .folio-stage .folio-title-page h2 { font-size: 36px; }
+  .folio-stage .folio-title-compact h2 { font-size: 28px; }
+  .folio-stage .folio-dedication-page { min-height: 400px; }
+  .folio-stage .folio-dedication-page:empty, .folio-stage .folio-continuation-page { min-height: 0; padding: 0; }
+  .folio-stage .folio-chapter-opening { min-height: 650px; gap: 32px; }
+  .folio-stage .folio-chapter-opening h2 { font-size: 30px; }
+  .folio-stage .folio-chapter-art { width: 192px; height: 192px; }
+  .folio-stage .folio-prose { font-size: 20px; text-align: left; }
   .folio-stage .folio-page footer { left: 24px; right: 24px; }
 }
 @media (max-width: 760px) {
-  .folio-public-shell { padding: 22px 18px 36px; }
+  .folio-public-shell { padding: 24px 16px 32px; }
   .folio-edit-fields { padding: 16px; }
+  .folio-stage .folio-cover, .folio-stage .folio-back-cover { min-height: 700px; }
+  .folio-navigation { gap: 16px; }
 }
 @media print {
   @page { size: A5 portrait; margin: 0; }

@@ -20,6 +20,42 @@ function configured() {
   vi.stubEnv("EMAIL_OWNER_TO", "owner@example.invalid"); vi.stubEnv("EMAIL_USER_EVENTS_TO", "user");
 }
 
+test("verified payments send one buyer receipt with the paid amount and purchased credits", async () => {
+  configured(); vi.stubEnv("EMAIL_USER_EVENTS_TO", "owner"); vi.stubEnv("RAZORPAY_KEY_ID", "rzp_live_fixture");
+  const t = convexTest(schema, modules);
+  const userId = await t.run(ctx => ctx.db.insert("users", { email: "buyer@example.invalid", name: "Buyer <family>" }));
+  await t.mutation(internal.payments.saveOrder, { userId, orderId: "order_receipt", amount: 20000, currency: "INR", creditsPerPurchase: 4 });
+  expect(await t.run(ctx => ctx.db.query("emailNotifications").collect())).toHaveLength(0);
+  await t.mutation(internal.payments.markPaid, { userId, orderId: "order_receipt", paymentId: "pay_receipt" });
+  await t.mutation(internal.payments.markPaid, { userId, orderId: "order_receipt", paymentId: "pay_receipt" });
+  const notices = await t.run(ctx => ctx.db.query("emailNotifications").collect());
+  expect(notices).toHaveLength(1);
+  await t.mutation(internal.notifications.deliver, { notificationId: notices[0]._id });
+  await t.mutation(internal.notifications.deliver, { notificationId: notices[0]._id });
+  expect(provider.send).toHaveBeenCalledTimes(1);
+  expect(provider.send.mock.calls[0][1]).toMatchObject({ to: "buyer@example.invalid", subject: "Your Charpai payment receipt" });
+  const email = provider.send.mock.calls[0][1];
+  expect(email.text).toContain("₹200.00"); expect(email.text).toContain("Storybook credits added: 4");
+  expect(email.text).toContain("pay_receipt"); expect(email.html).toContain("Hi,"); expect(email.html).not.toContain("Buyer"); expect(email.html).toContain("https://charpai.sreechand.pm/landing/charpai-logo.png"); expect(email.html).toContain(">https://charpai.sreechand.pm</a>");
+  expect((await t.run(ctx => ctx.db.query("paymentOrders").collect()))).toHaveLength(4);
+});
+
+test("wrong owners and complimentary credits cannot trigger payment receipts", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await t.run(ctx => ctx.db.insert("users", { email: "buyer@example.invalid" }));
+  const stranger = await t.run(ctx => ctx.db.insert("users", { email: "stranger@example.invalid" }));
+  await t.mutation(internal.payments.saveOrder, { userId, orderId: "order_owner", amount: 20000, currency: "INR" });
+  await expect(t.mutation(internal.payments.markPaid, { userId: stranger, orderId: "order_owner", paymentId: "pay_wrong" })).rejects.toThrow();
+  await t.mutation(internal.payments.saveOrder, { userId, orderId: "free_credit", amount: 0, currency: "INR" });
+  await t.mutation(internal.payments.markPaid, { userId, orderId: "free_credit", paymentId: "free" });
+  expect(await t.run(ctx => ctx.db.query("emailNotifications").collect())).toHaveLength(0);
+});
+
+test("test-mode receipts clearly say no real money was charged", () => {
+  const email = buildNotificationEmail("payment_receipt", { createdAt: 0, appUrl: "https://charpai.sreechand.pm/app", payment: { amount: 20000, currency: "INR", credits: 4, orderId: "order_test", paymentId: "pay_test", testMode: true } });
+  expect(email.subject).toContain("[TEST]"); expect(email.text).toContain("No real money was charged.");
+});
+
 test("new signups queue one owner alert; duplicates preserve contacts and never add another alert", async () => {
   const t = convexTest(schema, modules);
   await t.mutation(api.waitlist.add, { name: "Reader", email: "Reader@example.invalid", phone: "+1 202 555 0100" });

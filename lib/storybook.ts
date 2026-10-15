@@ -13,6 +13,7 @@ export type StorySection = {
   illustrationStorageId?: string;
   illustrationUrl?: string | null;
   sourceLinks?: SourceLink[];
+  hasClarifications?: boolean;
 };
 
 export type CharpaiDraftDesign = {
@@ -32,6 +33,7 @@ export type StorybookDraft = {
   shareRecording?: boolean;
   title: string;
   subtitle: string;
+  coverSubtitle?: string;
   dedication: string;
   languageNote: string;
   sections: StorySection[];
@@ -182,7 +184,7 @@ export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {
       illustrationStorageId: section.illustrationStorageId || "", illustrationUrl: section.illustrationUrl || "" };
   });
   return { ...emptyDraft(), ...source, sections, title: source.title,
-    subtitle: source.subtitle || "", dedication: source.dedication || input.dedication || "",
+    subtitle: source.subtitle || "", coverSubtitle: typeof source.coverSubtitle === "string" ? source.coverSubtitle : undefined, dedication: source.dedication || input.dedication || "",
     languageNote: source.languageNote || "", closingNote: source.closingNote || "", transcript: source.transcript || "",
     illustrationBrief: source.illustrationBrief || "", stampSubject: source.stampSubject || "", stampMotifs: source.stampMotifs || [],
     illustrationStorageId: source.illustrationStorageId || "", illustrationUrl: source.illustrationUrl || "", photoCaptions: source.photoCaptions || [],

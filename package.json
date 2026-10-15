@@ -29,7 +29,8 @@
     "react": "latest",
     "react-dom": "latest",
     "undici": "^8.12.1",
-    "zod": "latest"
+    "zod": "latest",
+    "@convex-dev/rate-limiter": "^0.3.2"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",

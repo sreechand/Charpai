@@ -8,7 +8,7 @@ import type { Id } from "./_generated/dataModel";
 
 const modules = import.meta.glob("./**/*.ts");
 const backendToken = "synthetic-generation-server-token";
-beforeEach(() => { vi.useFakeTimers(); vi.stubEnv("PAYMENT_BACKEND_TOKEN", backendToken); });
+beforeEach(() => { vi.useFakeTimers(); vi.stubEnv("CONVEX_CLOUD_URL", "https://test-backend.invalid"); vi.stubEnv("PAYMENT_BACKEND_TOKEN", backendToken); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 async function setup() {
   const t = convexTest(schema, modules); workflow.register(t);

@@ -4,6 +4,9 @@ import { convexAuth } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import type { ConvexCredentialsUserConfig } from "@convex-dev/auth/providers/ConvexCredentials";
 
+import { journeyContext, writeConfirmed } from "./funnel";
+import { safeFunnelWrite } from "./funnelAction";
+import { funnelErrorCode } from "../lib/funnel-events";
 import { env } from "./_generated/server";
 import { internal } from "./_generated/api";
 
@@ -26,9 +29,17 @@ const passwordProvider = Password({
 const passwordOptions = (passwordProvider as typeof passwordProvider & { options: ConvexCredentialsUserConfig }).options;
 const authorizePassword = passwordOptions.authorize;
 passwordOptions.authorize = async (params, ctx) => {
+  const context = journeyContext({visitId: params.telemetryVisitId, attemptId: params.telemetryAttemptId});
+  const flow = params.flow === "signUp" ? "signup" : "login";
+  const key = `password:${Date.now()}:${Math.random()}`;
+  const startedAt = Date.now();
+  await safeFunnelWrite(ctx, {...context, eventId: `${key}:start`, name: "auth_started", method: "password", flow});
   try {
-    return await authorizePassword(params, ctx);
+    const result = await authorizePassword(params, ctx);
+    if (result) await safeFunnelWrite(ctx, {...context, eventId: `${key}:accepted`, name: "auth_credentials_accepted", method: "password", flow, userId: result.userId, elapsedMs: Date.now()-startedAt});
+    return result;
   } catch (error) {
+    await safeFunnelWrite(ctx, {...context, eventId: `${key}:failed`, name: "auth_failed", method: "password", flow, errorCode: funnelErrorCode(error), elapsedMs: Date.now()-startedAt});
     const message = error instanceof Error ? error.message : "";
     if (message.includes("InvalidAccountId")) {
       throw new ConvexError({ code: "ACCOUNT_NOT_FOUND" });
@@ -43,10 +54,13 @@ passwordOptions.authorize = async (params, ctx) => {
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   callbacks: {
     async beforeSessionCreation(ctx, { userId }) {
+      try { await writeConfirmed(ctx, {eventId: `session:${userId}:${Date.now()}:${Math.random()}`, name: "session_created", userId}); } catch { console.error("funnel_write_failed:session_created"); }
       const eventKey = `login:${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
       await ctx.scheduler.runAfter(0, internal.notifications.login, { userId, eventKey });
     },
-    async afterUserCreatedOrUpdated(ctx, { userId, existingUserId }) {
+    async afterUserCreatedOrUpdated(ctx, { userId, existingUserId, provider }) {
+      if (provider.id === "google") {try {await writeConfirmed(ctx,{eventId:`oauth:${userId}:${Date.now()}:${Math.random()}`,name:"auth_credentials_accepted",method:"google",userId});}catch {console.error("funnel_write_failed:oauth_accepted");}}
+      if (!existingUserId) { try { await writeConfirmed(ctx, {eventId: `account:${userId}`, name: "account_created", userId, ...(provider.id === "google" || provider.id === "password" ? {method: provider.id} : {})}); } catch { console.error("funnel_write_failed:account_created"); } }
       if (!existingUserId) await ctx.scheduler.runAfter(0, internal.notifications.accountSignup, { userId });
     }
   },

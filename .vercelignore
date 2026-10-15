@@ -24,3 +24,6 @@ dist/
 .interface-design/
 idea-lock-references/
 resources/
+
+# Local Convex credentials and test databases.
+.convex/

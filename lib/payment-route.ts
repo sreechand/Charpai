@@ -2,6 +2,11 @@ import { ConvexHttpClient } from "convex/browser";
 import { ConvexError } from "convex/values";
 import { NextResponse } from "next/server";
 
+export function paymentJourney(request: Request) {
+  const visitId=request.headers.get("X-Charpai-Visit"),attemptId=request.headers.get("X-Charpai-Attempt");
+  const valid=(v:string|null):v is string=>Boolean(v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v));
+  return {...(valid(visitId)?{visitId}:{}),...(valid(attemptId)?{attemptId}:{})};
+}
 export function paymentClient(request: Request) {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
   if (!token) throw new ConvexError({ status: 401, message: "Sign in before paying." });

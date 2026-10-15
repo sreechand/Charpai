@@ -3,6 +3,7 @@ import { StorybookReader } from "@/components/storybook-reader";
 import type { CharpaiDraftDesign, StorySection } from "@/lib/storybook";
 
 export type PublicStorybook = {
+  coverSubtitle?: string;
   slug: string; title: string; subtitle: string; dedication: string; languageNote: string;
   sections: StorySection[]; closingNote: string; illustrationBrief: string;
   stampSubject: string; stampMotifs: string[]; illustrationUrl: string | null;

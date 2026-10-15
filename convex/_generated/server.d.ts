@@ -34,6 +34,7 @@ type Env = {
   readonly EMAIL_FROM: string | undefined;
   readonly EMAIL_OWNER_TO: string | undefined;
   readonly EMAIL_USER_EVENTS_TO: string | undefined;
+  readonly FUNNEL_RELEASE: string | undefined;
   readonly GENERATION_BACKEND_URL: string | undefined;
   readonly GENERATION_WORKER_URL: string | undefined;
   readonly GOOGLE_CLIENT_ID: string | undefined;
