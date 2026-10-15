@@ -1,5 +1,18 @@
 # Publishing Charpai
 
+## Story text editing and downloads released — 2026-10-15
+
+Published code commit `5a56083` to GitHub `main` and production website deployment `dpl_4w56fALkJPDgoQ4re9Quk1XFxytd`, immutable URL `https://agara-acmylmqb7-sreechands-projects.vercel.app`, promoted to `https://charpai.sreechand.pm`. Convex production `elegant-mosquito-650` includes the owner-checked `storybookPages:getOwnedByRun` query so reopened generated books load their saved wording instead of their old generation checkpoint. Save changes keeps the existing unlisted link.
+
+Visible text editing uses a separate working copy, explicit Regenerate storybook and Cancel edits. Regeneration keeps exact wording/artwork and uses no generation credit or AI request. Shared/private/public readers offer complete UTF-8 text downloads beside PDF; downloads stay hidden while edits are open. Existing homepage/launch flag remains `CHARPAI_LAUNCHED=false`; no here.now update was needed.
+
+Release source: `/private/tmp/charpai-text-release-20261015`, based on the exact prior live PDF snapshot. Commit `66618b5` records that already-published baseline; `5a56083` adds this scoped feature and reopening fix. Unrelated source-review, photo management, cost tracking and Interview Assist work stays local. Environment files/credentials/notes/sample exports were excluded from the 132-file website upload.
+
+79 release tests, TypeScript, build, changed-file lint, Convex dry-run/schema validation/deploy and hosted build pass; no indexes removed. Full release lint has only three historical unused-variable warnings. BrowserOS neo verified the actual public book at 1440px/390px and downloaded its `.txt`; disk comparison matches every final public field and all six chapters exactly. Existing six chapter bodies/135 paragraphs and image URLs remain unchanged (body SHA-256 `3e14b2cc115d308d62c3a433a13e600a87e4cfa57ecb683db810499c98c9bd0d`). The actual editor/regenerate/cancel flow was checked in the release component harness with bilingual text and a real download. Production assets contain the editor/reopening code and production backend URL, with no development URL. Live signed-out owner query refuses access. Homepage, direct login, invalid update signup and a prior fictional duplicate signup pass. Owner save/reopen is covered by automated owner/wrong-user tests; it was not exercised with a signed-in production account.
+
+The Vercel deploy command reported `Not authorized` while watching build status; API inspection/build logs confirmed the same deployment was successfully building. It reached READY and was promoted normally; no retry deployment or weakened protection. No family edits, payments or generation credits were used. Next: owner checks Edit story text → Regenerate storybook → Save changes on a generated book.
+
+
 ## Verified setup and standing approval
 
 Verified on 2026-10-13: `https://charpai.sreechand.pm` is served by Vercel; Convex runs the backend, authentication and storage. The user explicitly approved the existing host and asked to save this setup and publishing permission so we do not ask again.

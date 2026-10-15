@@ -1,3 +1,5 @@
+- 2026-10-15: Text editing/regeneration and `.txt` download released from committed production snapshot. Code `5a56083`; website `dpl_4w56fALkJPDgoQ4re9Quk1XFxytd`; Convex `elegant-mosquito-650`. Launch flag remains false. 79 tests/checks, hosted build, desktop/phone public-book check and complete actual text download pass. Owner-safe save/reopen has automated coverage; live owner-account check remains. Other pending features remain local. Details: `docs/PUBLISHING.md`. Next: owner tries editing and saving one generated book.
+
 # Text-editing release — 2026-10-15
 
 - Commit and publish scoped exact-wording editing/regeneration, text download and owner-safe reopening of saved wording. Preserve the current launch flag and already-live PDF template. 79 tests, TypeScript/build and release browser checks pass; deployment/public-domain verification follows. Other local projects remain outside this release.
