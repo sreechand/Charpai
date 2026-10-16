@@ -1,5 +1,20 @@
 # Publishing Charpai
 
+## Complete photo flow released — 2026-10-16
+
+Published original-photo uploads, optional family titles/descriptions, reviewable AI descriptions, automatic chapter matching and manual chapter choice to `https://charpai.sreechand.pm`. Originals remain unchanged in the reader and PDF. Library **Edit** reopens an owned saved book without requiring another purchase; saving retains its existing link, caption and placement. The previously released story-text editor/regeneration and complete text download remain available, including photo captions in downloads.
+
+Final website: `dpl_5PvQxhFKtTEkPdacpxjQk1E3NPyb`, immutable URL `https://agara-7d21vb3h9-sreechands-projects.vercel.app`. Replaces first photo release `dpl_CjgHxm9pAzNvPUju7ESZXxE414m8` with a verified full-width photo form inside the intake grid. Backend functions/schema deployed to production `elegant-mosquito-650`; no indexes deleted. Build/runtime use the production backend and `CHARPAI_LAUNCHED=false`. The additional here.now homepage was unchanged.
+
+Scoped source: `/private/tmp/charpai-photo-release-20261016`, based on committed production snapshot `57be1f7`. Unrelated source-review, generation-cost tracking and Interview Assist remain local. Upload inspection excluded environment files, credentials, notes, sample exports and removed desk artwork. No migration of hosts or changes to live payment credentials.
+
+Verified: 90 scoped tests pass, TypeScript/build pass, lint has zero errors and three historical warnings. Production backend dry-run, schema validation and hosted builds pass. BrowserOS neo checked the actual signed-in public website using a fictional account and classroom image: upload automatically invokes real AI; classroom matches teaching; suggested caption can be adopted then corrected; manual placement survives save/reload/reopen; returning to automatic placement saves the AI chapter; original downloaded bytes match uploaded bytes. Live owner checks used no payment or generation credit. A synthetic account and one appended synthetic run/book were used; no existing family data was edited.
+
+Desktop 1440px and phone 390px checks cover the photo form, edited/complete states, chapter controls, keyboard focus and shared reader; no horizontal overflow. A real production 8-page A5 PDF was downloaded, all pages rendered and visually inspected: original classroom image and exact custom caption appear with the teaching chapter, all narration follows and no empty leaves remain. Actual text download matches every final field, chapter and caption. Existing Ramadevi six chapter bodies/135 paragraphs are unchanged (joined-body SHA-256 `3e14b2cc115d308d62c3a433a13e600a87e4cfa57ecb683db810499c98c9bd0d`). Homepage stays prelaunch, direct workspace works, invalid update signup returns 400, prior fictional duplicate signup returns 200, unsigned photo analysis returns 401. Failure/retry and in-flight edit protection were exercised in development and covered by automated tests; no new audio-to-story generation or real family-photo AI analysis was performed in production.
+
+Evidence: `output/verification/photo-release/`; earlier complete development checks: `docs/STORYBOOK_DESIGN.md` (AI photo analysis section). Next: owner opens an existing book with **Edit**, adds family photographs, reviews descriptions and saves.
+
+
 ## Story text editing and downloads released — 2026-10-15
 
 Published code commit `5a56083` to GitHub `main` and production website deployment `dpl_4w56fALkJPDgoQ4re9Quk1XFxytd`, immutable URL `https://agara-acmylmqb7-sreechands-projects.vercel.app`, promoted to `https://charpai.sreechand.pm`. Convex production `elegant-mosquito-650` includes the owner-checked `storybookPages:getOwnedByRun` query so reopened generated books load their saved wording instead of their old generation checkpoint. Save changes keeps the existing unlisted link.

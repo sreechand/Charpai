@@ -3,6 +3,27 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 
+import {requireOwnedPhoto} from "./storybookPhotos";
+
+export const generatePhotoUploadUrl = mutation({
+  args:{runId:v.optional(v.id("runs"))},returns:v.string(),handler:async(ctx,args)=>{
+    const userId=await requireAuthUserId(ctx);
+    if(args.runId){
+      const run=await ctx.db.get(args.runId);
+      if(!run || run.userId!==userId)throw new Error("You do not have access to this storybook.");
+    }else{
+      const credit=await ctx.db.query("paymentOrders").withIndex("by_available",q=>q.eq("userId",userId).eq("status","paid").eq("generationId",undefined)).first();
+      const unfinished=await ctx.db.query("paymentOrders").withIndex("by_unfinished",q=>q.eq("userId",userId).eq("status","paid").eq("runId",undefined)).take(1000);
+      if(!credit&&!unfinished.some(order=>order.generationId))throw new Error("Open your saved book or unlock a storybook before adding photos.");
+    }
+    return await ctx.storage.generateUploadUrl();
+  }
+});
+
+export const getPhotoUrl=query({args:{storageId:v.id("_storage")},returns:v.union(v.string(),v.null()),handler:async(ctx,args)=>{
+  const userId=await requireAuthUserId(ctx);await requireOwnedPhoto(ctx,args.storageId,userId);return await ctx.storage.getUrl(args.storageId);
+}});
+
 export const generateUploadUrl = mutation({
   args: {},
   returns: v.string(),

@@ -1,8 +1,20 @@
+import {MAX_STORY_PHOTOS,PHOTO_TYPES} from "./storybook-photos";
+import type {PhotoAnalysis} from "./photo-analysis";
+
 export type PhotoPreview = {
   file?: File;
   id: string;
   name: string;
   url: string;
+  storageId?: string;
+  title?: string;
+  description?: string;
+  sectionId?: string;
+  suggestedSectionId?: string;
+  analysis?: PhotoAnalysis;
+  analysisStatus?: "analyzing" | "failed";
+  analysisError?: string;
+  uploadError?: string;
 };
 
 export const acceptedAudioTypes = [
@@ -41,19 +53,23 @@ export function validateAudioFile(file: File | null) {
 }
 
 export function readPhotoPreviews(files: FileList | null): Promise<PhotoPreview[]> {
-  const selected = Array.from(files || []).slice(0, 3);
+  const selected = Array.from(files || []);
+  if(selected.length>MAX_STORY_PHOTOS)return Promise.reject(new Error("Choose up to three family photos."));
+  const invalid=selected.find(file=>!PHOTO_TYPES.includes(file.type)||file.size<1||file.size>10*1024*1024);
+  if(invalid)return Promise.reject(new Error(`Choose a JPEG, PNG, WebP, GIF or AVIF image under 10 MB. ${invalid.name} could not be added.`));
 
   return Promise.all(
     selected.map(
-      (file, index) =>
+      (file) =>
         new Promise<PhotoPreview>((resolve, reject) => {
           const reader = new FileReader();
           reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
           reader.onload = () =>
             resolve({
               file,
-              id: `${file.name}-${file.size}-${index}`,
+              id: crypto.randomUUID(),
               name: file.name,
+              title:"",description:"",
               url: String(reader.result)
             });
           reader.readAsDataURL(file);

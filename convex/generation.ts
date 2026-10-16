@@ -1,3 +1,6 @@
+import {photoAnalysisRecord} from "./photoAnalysisFields";
+import type {PhotoAnalysis} from "../lib/photo-analysis";
+import {MAX_PHOTO_TITLE,PHOTO_TYPES} from "../lib/storybook-photos";
 import { vWorkflowId, vResultValidator } from "@convex-dev/workflow";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
@@ -76,14 +79,14 @@ export const listMine = query({ args: {}, returns: v.array(summaryValidator), ha
   if (!userId) return [];
   return (await ctx.db.query("generationDrafts").withIndex("by_userId", q => q.eq("userId", userId)).order("desc").take(50)).map(summary);
 } });
-export const getMine = query({ args: { draftId }, returns: v.union(summaryValidator.extend({ inputJson: v.string(), audioStorageId: v.id("_storage"), audioUrl: v.union(v.string(), v.null()), draftUrl: v.union(v.string(), v.null()), textDraftUrl: v.union(v.string(), v.null()), intakeUrl: v.union(v.string(), v.null()), transcriptUrl: v.union(v.string(), v.null()), runId: v.union(v.id("runs"), v.null()), completedSteps: v.array(v.string()), photos: v.array(v.object({ storageId: v.id("_storage"), fileName: v.string(), url: v.union(v.string(), v.null()) })) }), v.null()), handler: async (ctx, args) => {
+export const getMine = query({ args: { draftId }, returns: v.union(summaryValidator.extend({ inputJson: v.string(), audioStorageId: v.id("_storage"), audioUrl: v.union(v.string(), v.null()), draftUrl: v.union(v.string(), v.null()), textDraftUrl: v.union(v.string(), v.null()), intakeUrl: v.union(v.string(), v.null()), transcriptUrl: v.union(v.string(), v.null()), runId: v.union(v.id("runs"), v.null()), completedSteps: v.array(v.string()), photos: v.array(v.object({ storageId: v.id("_storage"), fileName: v.string(), url: v.union(v.string(), v.null()), title:v.string(),description:v.string(),analysis:v.optional(photoAnalysisRecord) })) }), v.null()), handler: async (ctx, args) => {
   const userId = await getAuthUserId(ctx), d = await ctx.db.get(args.draftId);
   if (!d || !userId || d.userId !== userId) return null;
   const url = async (key: string) => { const c = await checkpoint(ctx, d._id, key); return c ? ctx.storage.getUrl(c.artifactStorageId) : null; };
-  const photos: { storageId: Id<"_storage">; fileName: string; url: string | null }[] = [];
+  const photos: { storageId: Id<"_storage">; fileName: string; url: string | null;title:string;description:string;analysis?:PhotoAnalysis }[] = [];
   for (const storageId of d.photoStorageIds ?? []) {
     const p = await ctx.db.query("generationPhotos").withIndex("by_storage_id", q => q.eq("storageId", storageId)).unique();
-    if (p?.userId === d.userId) photos.push({ storageId, fileName: p.fileName, url: await ctx.storage.getUrl(storageId) });
+    if (p?.userId === d.userId) photos.push({ storageId, fileName: p.fileName, url: await ctx.storage.getUrl(storageId),title:p.title||"",description:p.description||"",...(p.analysis?{analysis:p.analysis}:{}) });
   }
   const checkpoints = await ctx.db.query("generationCheckpoints").withIndex("by_draftId_and_key", q => q.eq("draftId", d._id)).take(500);
   const completedSteps = checkpoints.map(c => c.key).filter(key => /^(audio\.parts|transcription\.part\.\d+|transcript|intake|draft\.text|illustration\.\d+|result)$/.test(key));
@@ -221,7 +224,7 @@ export const serverMediaUrl = action({ args: { backendToken: v.string(), draftId
   return ctx.storage.getUrl(args.storageId);
 } });
 
-export const recordPhotoUpload = mutation({ args: { storageId: v.id("_storage"), fileName: v.string(), contentType: v.string(), size: v.number() }, returns: v.null(), handler: async (ctx, args) => {
+export const recordPhotoUpload = mutation({ args: { storageId: v.id("_storage"), fileName: v.string(), contentType: v.string(), size: v.number(), title:v.optional(v.string()), description:v.optional(v.string()) }, returns: v.null(), handler: async (ctx, args) => {
   const userId = await getAuthUserId(ctx); if (!userId) throw new ConvexError("Sign in to upload family photos.");
   const existing = await ctx.db.query("generationPhotos").withIndex("by_storage_id", q => q.eq("storageId", args.storageId)).unique();
   if (existing) { if (existing.userId !== userId) throw new ConvexError("This photo belongs to another account."); return null; }
@@ -229,7 +232,8 @@ export const recordPhotoUpload = mutation({ args: { storageId: v.id("_storage"),
   const image = await ctx.db.query("storybookImages").withIndex("by_storage_id", q => q.eq("storageId", args.storageId)).unique();
   if ((audio && audio.userId !== userId) || (image && image.userId !== userId)) throw new ConvexError("This photo belongs to another account.");
   const metadata = await ctx.db.system.get(args.storageId);
-  const types = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/heic", "image/heif"];
+  if((args.title?.length||0)>MAX_PHOTO_TITLE)throw new ConvexError(`Keep photo titles within ${MAX_PHOTO_TITLE} characters.`);
+  const types = PHOTO_TYPES;
   if (!metadata || metadata.size < 1 || metadata.size > 10 * 1024 * 1024 || metadata.size !== args.size || metadata.contentType !== args.contentType || !types.includes(args.contentType)) throw new ConvexError("Upload a photo smaller than 10 MB in a supported image format.");
   await ctx.db.insert("generationPhotos", { ...args, fileName: args.fileName.slice(0, 255), userId, createdAt: Date.now() }); return null;
 } });

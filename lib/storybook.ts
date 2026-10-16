@@ -1,3 +1,4 @@
+import {normalizePhotos} from "./storybook-photos";
 import type { SourceLink, CoverageEntry } from "./storybook-source";
 import {
   charpaiStorybookPrompt,
@@ -26,6 +27,16 @@ export type CharpaiDraftDesign = {
   artifactForms: string[];
 };
 
+export type StoryPhoto = {
+  id: string;
+  storageId?: string;
+  url?: string | null;
+  title: string;
+  description: string;
+  sectionId?: string;
+  suggestedSectionId?: string;
+};
+
 export type StorybookDraft = {
   sourceRevision?: number;
   coverage?: CoverageEntry[];
@@ -34,6 +45,7 @@ export type StorybookDraft = {
   title: string;
   subtitle: string;
   coverSubtitle?: string;
+  photos?: StoryPhoto[];
   dedication: string;
   languageNote: string;
   sections: StorySection[];
@@ -183,7 +195,7 @@ export function normalizeDraft(value: unknown, input: Partial<IntakePayload> = {
       artifactSubject: section.artifactSubject || "", artifactBrief: section.artifactBrief || "",
       illustrationStorageId: section.illustrationStorageId || "", illustrationUrl: section.illustrationUrl || "" };
   });
-  return { ...emptyDraft(), ...source, sections, title: source.title,
+  return { ...emptyDraft(), ...source, photos:normalizePhotos(source.photos), sections, title: source.title,
     subtitle: source.subtitle || "", coverSubtitle: typeof source.coverSubtitle === "string" ? source.coverSubtitle : undefined, dedication: source.dedication || input.dedication || "",
     languageNote: source.languageNote || "", closingNote: source.closingNote || "", transcript: source.transcript || "",
     illustrationBrief: source.illustrationBrief || "", stampSubject: source.stampSubject || "", stampMotifs: source.stampMotifs || [],

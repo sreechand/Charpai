@@ -41,3 +41,7 @@ The prompt in `lib/storybook.ts` requires these fields and asks the model to sel
 ## Generated book text editing — 2026-10-15
 
 Use a separate paper working-copy form above the shared reader. Controls retain 44px minimum targets, 14px UI labels/help, story-serif fields and pen-blue focus. Keep 16px object gaps and 32px thought spacing around action/chapter groups. Apply with Regenerate storybook; Cancel edits restores the existing book and focus returns to Edit story text. Wrap the Download text/Export PDF action group on phones. Never export the old wording while editing is open. Desktop/390px browser checks passed.
+
+## Photo flow release — 2026-10-16
+
+Photo editing spans all intake upload-grid columns (`grid-column: 1 / -1`) and uses existing paper/ink, 16px object/32px thought spacing, shared 44px controls and visible focus. AI descriptions remain a separate reviewable suggestion with an explicit adoption action; manual chapter choice takes precedence. Original proportions/colours remain unchanged in mounted book leaves. Production desktop 1440px and phone 390px form/shared-reader checks, actual PDF rendering and text download pass. Published release details: `docs/PUBLISHING.md`.

@@ -58,7 +58,7 @@ type EvidenceContextValue = {
   submitGeneration: (input: {generationId: string; inputJson: string; audioStorageId: Id<"_storage">; fileName: string; photoStorageIds?: Id<"_storage">[]}) => Promise<string>;
   resumeGeneration: (id: string) => Promise<void>;
   markGenerationPublished: (id: string, runId: string) => Promise<void>;
-  uploadPhoto: (file: File) => Promise<Id<"_storage">>;
+  uploadPhoto: (file: File,metadata?:{title?:string;description?:string},runId?:string|null) => Promise<{storageId:Id<"_storage">;url:string}>;
   paymentAvailable: boolean | undefined;
   paymentCredits: number | undefined;
   paymentResumeId: string | null | undefined;
@@ -73,6 +73,8 @@ type EvidenceContextValue = {
   markExported: (id: string, title: string) => Promise<void>;
   markFailed: (id: string, error: string) => Promise<void>;
   loadSavedBookByRun: (runId: string) => Promise<{draft: Partial<StorybookDraft>; slug: string} | null>;
+  updatePhotoDetails:(storageId:string,title:string,description:string)=>Promise<void>;
+  loadOwnedBook:(pageId:string)=>Promise<{draft:StorybookDraft;runId:string;slug:string}|null>;
   publishStoryPage: (draft: StorybookDraft, runId?: string) => Promise<StorybookPageSummary | null>;
   deleteStoryPage: (pageId: string) => Promise<void>;
 };
@@ -207,13 +209,20 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
       submitGeneration: async input => { const id = await submitGeneration(input); setSelectedDraftId(id); return id; },
       resumeGeneration: async id => { setSelectedDraftId(id as Id<"generationDrafts">); await resumeGeneration({draftId: id as Id<"generationDrafts">}); },
       markGenerationPublished: async (id, runId) => { await markGenerationPublished({draftId: id as Id<"generationDrafts">, runId: runId as Id<"runs">}); },
-      uploadPhoto: async file => {
-        const url = await generateUploadUrl();
-        const response = await fetch(url, {method: "POST", headers: {"Content-Type": file.type}, body: file});
-        if (!response.ok) throw new Error("The family photo could not be saved.");
-        const {storageId} = await response.json() as {storageId: Id<"_storage">};
-        await recordPhotoUpload({storageId, fileName: file.name, contentType: file.type, size: file.size});
-        return storageId;
+      updatePhotoDetails:async(storageId,title,description)=>{await convexClient!.mutation(api.photoAnalysis.updateDetails,{storageId:storageId as Id<"_storage">,title,description});},
+      loadOwnedBook:async pageId=>{
+        const saved=await convexClient!.query(api.storybookPages.getOwnedByPage,{pageId:pageId as Id<"storybookPages">});
+        return saved?{...saved,draft:JSON.parse(saved.draftJson) as StorybookDraft}:null;
+      },
+      uploadPhoto:async(file,metadata,runId)=>{
+        const url=await convexClient!.mutation(api.files.generatePhotoUploadUrl,{...(runId?{runId:runId as Id<"runs">}:{})});
+        const response=await fetch(url,{method:"POST",headers:{"Content-Type":file.type},body:file});
+        if(!response.ok)throw new Error("The family photo could not be saved.");
+        const {storageId}=await response.json() as {storageId:Id<"_storage">};
+        await recordPhotoUpload({storageId,fileName:file.name,contentType:file.type,size:file.size,...metadata});
+        const photoUrl=await convexClient!.query(api.files.getPhotoUrl,{storageId});
+        if(!photoUrl)throw new Error("The uploaded photo could not be reopened. Retry the upload.");
+        return {storageId,url:photoUrl};
       },
       paymentAvailable: paymentStatus?.available,
       paymentCredits: paymentStatus?.credits,
@@ -270,6 +279,7 @@ function ConvexEvidenceProvider({ children }: { children: ReactNode }) {
         return await publish({
           draft: {
             ...publishableDraft,
+            photos:publishableDraft.photos?.map(({url,...photo})=>{void url;return {...photo,storageId:photo.storageId as Id<"_storage">};}),
             sections: publishableDraft.sections.map(({ illustrationUrl: sectionUrl, illustrationStorageId: sectionStorageId, ...section }) => {
               void sectionUrl;
               return { ...section, illustrationStorageId: sectionStorageId ? sectionStorageId as Id<"_storage"> : undefined };
@@ -357,6 +367,8 @@ function LocalEvidenceProvider({ children }: { children: ReactNode }) {
       submitGeneration: async () => { throw new Error("Sign in to save your story draft."); },
       resumeGeneration: async () => undefined,
       markGenerationPublished: async () => undefined,
+      updatePhotoDetails:async()=>{},
+      loadOwnedBook:async()=>null,
       uploadPhoto: async () => { throw new Error("Sign in to save family photos."); },
       paymentAvailable: false,
       paymentCredits: 0,

@@ -1,3 +1,5 @@
+import {storedStoryPhoto,publicStoryPhoto,requireOwnedPhotos,resolvePhotos,type StoredStoryPhoto} from "./storybookPhotos";
+import type {Doc} from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -27,6 +29,7 @@ const storybookDraft = v.object({
   title: v.string(),
   subtitle: v.string(),
   coverSubtitle: v.optional(v.string()),
+  photos:v.optional(v.array(storedStoryPhoto)),
   dedication: v.string(),
   languageNote: v.string(),
   sections: v.array(storySection),
@@ -52,6 +55,7 @@ const publicStorybookPage = v.object({
   title: v.string(),
   subtitle: v.string(),
   coverSubtitle: v.optional(v.string()),
+  photos:v.optional(v.array(publicStoryPhoto)),
   dedication: v.string(),
   languageNote: v.string(),
   sections: v.array(publicStorySection),
@@ -122,22 +126,26 @@ export const getPublicBySlug = query({
   }
 });
 
-/** Restore the latest saved text only after checking the caller owns its paid run. */
-export const getOwnedByRun = query({
-  args: {runId: v.id("runs")},
-  returns: v.union(v.null(),v.object({slug:v.string(),draftJson:v.string()})),
-  handler: async (ctx,args) => {
-    const ownerId=await requireAuthUserId(ctx);
-    await requireOwnedRun(ctx,args.runId,ownerId);
-    const page=await ctx.db.query("storybookPages").withIndex("by_run",q=>q.eq("runId",args.runId)).unique();
-    if(!page || page.status!=="published" || page.ownerId!==ownerId)return null;
-    const {_id,slug,createdAt,updatedAt,...published}=await toPublicPage(ctx,page);
-    void _id;void createdAt;void updatedAt;
-    return {slug,draftJson:JSON.stringify({...published,
-      illustrationStorageId:page.illustrationStorageId || "",
-      sections:published.sections.map((section,index)=>({...section,illustrationStorageId:page.sections[index].illustrationStorageId}))})};
-  }
-});
+async function ownedSnapshot(ctx:QueryCtx,page:Doc<"storybookPages">) {
+  const {_id,slug,createdAt,updatedAt,...published}=await toPublicPage(ctx,page);
+  void _id;void createdAt;void updatedAt;
+  return {slug,draftJson:JSON.stringify({...published,
+    illustrationStorageId:page.illustrationStorageId||"",
+    photos:(page.photos||[]).map((photo,index)=>({...photo,url:published.photos?.[index]?.url||null})),
+    sections:published.sections.map((section,index)=>({...section,illustrationStorageId:page.sections[index].illustrationStorageId}))})};
+}
+export const getOwnedByRun=query({args:{runId:v.id("runs")},returns:v.union(v.null(),v.object({slug:v.string(),draftJson:v.string()})),handler:async(ctx,args)=>{
+ const ownerId=await requireAuthUserId(ctx);await requireOwnedRun(ctx,args.runId,ownerId);
+ const page=await ctx.db.query("storybookPages").withIndex("by_run",q=>q.eq("runId",args.runId)).unique();
+ if(!page||page.ownerId!==ownerId||page.status!=="published")return null;
+ return await ownedSnapshot(ctx,page);
+}});
+export const getOwnedByPage=query({args:{pageId:v.id("storybookPages")},returns:v.union(v.null(),v.object({runId:v.id("runs"),slug:v.string(),draftJson:v.string()})),handler:async(ctx,args)=>{
+ const ownerId=await requireAuthUserId(ctx);const page=await ctx.db.get(args.pageId);
+ if(!page||page.ownerId!==ownerId||page.status!=="published"||!page.runId)return null;
+ await requireOwnedRun(ctx,page.runId,ownerId);
+ return {...await ownedSnapshot(ctx,page),runId:page.runId};
+}});
 
 export const publish = mutation({
   args: {
@@ -149,6 +157,7 @@ export const publish = mutation({
     const ownerId = await requireAuthUserId(ctx);
     if (!args.runId) throw new Error("A paid storybook is required to publish.");
     await requireOwnedRun(ctx, args.runId, ownerId);
+    await requireOwnedPhotos(ctx,args.draft.photos||[],args.draft.sections,ownerId);
     const existing = await ctx.db.query("storybookPages").withIndex("by_run", q => q.eq("runId", args.runId)).unique();
     if (args.draft.illustrationStorageId) {
       await requireOwnedStorybookImage(ctx, args.draft.illustrationStorageId, ownerId);
@@ -281,6 +290,7 @@ function slugPrefix(title: string) {
 
 function sanitizeDraft(draft: Infer<typeof storybookDraft>) {
   return {
+    ...(draft.photos!==undefined?{photos:draft.photos}:{}),
     title: limitText(draft.title, 160) || "Untitled Charpai Story",
     subtitle: draft.subtitle,
     ...(draft.coverSubtitle !== undefined ? {coverSubtitle: draft.coverSubtitle} : {}),
@@ -324,6 +334,7 @@ async function toPublicPage(ctx: MutationCtx | QueryCtx, page: {
   title: string;
   subtitle: string;
   coverSubtitle?: string;
+  photos?:StoredStoryPhoto[];
   dedication: string;
   languageNote: string;
   sections: Array<{ id: string; heading: string; body: string; artifactSubject?: string; artifactBrief?: string; illustrationStorageId?: Id<"_storage"> }>;
@@ -354,6 +365,7 @@ async function toPublicPage(ctx: MutationCtx | QueryCtx, page: {
     title: page.title,
     subtitle: page.subtitle,
     ...(page.coverSubtitle !== undefined ? {coverSubtitle: page.coverSubtitle} : {}),
+    photos:await resolvePhotos(ctx,page.photos||[]),
     dedication: page.dedication,
     languageNote: page.languageNote,
     sections: await Promise.all(page.sections.map(async (section, index) => ({

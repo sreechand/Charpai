@@ -14,6 +14,9 @@ import {
   Trash2
 } from "lucide-react";
 import Image from "next/image";
+import {StorybookPhotosEditor} from "./storybook-photos-editor";
+import {usePhotoAnalysis} from "./use-photo-analysis";
+import {normalizePhotos,PHOTO_TYPES,MAX_STORY_PHOTOS} from "@/lib/storybook-photos";
 import { StorybookEditor } from "@/components/storybook-editor";
 import {applyStoryText} from "@/lib/storybook-text";
 import { AudioIntake } from "@/components/audio-intake";
@@ -122,6 +125,9 @@ export function StorybookApp() {
   const [audio, setAudio] = useState<File | null>(null);
   const [isRecordingBusy, setIsRecordingBusy] = useState(false);
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
+  const [isUploadingPhotos,setIsUploadingPhotos]=useState(false);
+  const photoOwnerRef=useRef<string|null>(null);
+  const [draftsOpen,setDraftsOpen]=useState<boolean|null>(null);
   const [draft, setDraft] = useState<StorybookDraft>(emptyDraft());
   const [pendingRecommendation, setPendingRecommendation] = useState<PendingRecommendation | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "reviewing" | "ready" | "failed">("idle");
@@ -137,7 +143,11 @@ export function StorybookApp() {
     useState<GenerationStageId>("uploading");
 
   const activeIntake = pendingRecommendation?.intake || intake;
-  const activeDraft = pendingRecommendation?.draft || draft;
+  const activeDraftBase = pendingRecommendation?.draft || draft;
+  const activeDraft=useMemo(()=>({...activeDraftBase,photos:normalizePhotos(photos)}),[activeDraftBase,photos]);
+  const analyzePhoto=usePhotoAnalysis({photos,setPhotos,sections:activeDraft.sections,authToken:auth.authToken,bookKey:activeBookId});
+  const analysisBusy=photos.some(photo=>photo.analysisStatus==="analyzing");
+  const draftsVisible=draftsOpen ?? !activeBookId;
   const hasPendingRecommendation = Boolean(pendingRecommendation);
   const generationStage =
     generationStages.find((stage) => stage.id === generationStageId) || generationStages[0];
@@ -151,7 +161,10 @@ export function StorybookApp() {
       setActiveBookId(selectedGeneration.generationId);
       runIdRef.current = selectedGeneration.runId;
       setSavedAudioUrl(selectedGeneration.audioUrl);
-      setPhotos(selectedGeneration.photos.map(photo => ({id: photo.storageId, name: photo.fileName, url: photo.url || ""})));
+      if(photoOwnerRef.current!==selectedGeneration._id){
+        photoOwnerRef.current=selectedGeneration._id;
+        setPhotos(selectedGeneration.photos.map(photo=>({id:photo.storageId,storageId:photo.storageId,name:photo.fileName,url:photo.url||"",title:photo.title,description:photo.description,analysis:photo.analysis,suggestedSectionId:photo.analysis?.sectionId||undefined})));
+      }
       if (selectedGeneration.stage !== "ready") setGenerationStageId(selectedGeneration.stage);
       if (selectedGeneration.status === "queued" || selectedGeneration.status === "running") {
         setStatus("generating"); setMessage("Your draft is saved. You can close this page and come back.");
@@ -176,7 +189,10 @@ export function StorybookApp() {
         if (cancelled) return;
         setDraft(saved ? {...data.draft, ...saved.draft} : data.draft);
         setPendingRecommendation(null);setStatus("ready");
-        if (saved) setPublishedStoryPath(`/s/${saved.slug}`);
+        if (saved) {
+          setPublishedStoryPath(`/s/${saved.slug}`);
+          setPhotos((saved.draft.photos||[]).map(photo=>({...photo,name:photo.title||"Family photograph",url:photo.url||""})));
+        }
         setMessage("Your saved book is open for editing.");return;
       }
       if (selectedGeneration.draftUrl && "draft" in data && data.draft) {
@@ -190,11 +206,13 @@ export function StorybookApp() {
   }, [selectedGeneration, openDraftVersion, loadSavedBookByRun]);
 
   function startNewDraft() {
+    photoOwnerRef.current=null;runIdRef.current=null;setPublishedStoryPath("");setDraftsOpen(false);
     evidence.openGeneration(null); loadedDraftRef.current = ""; generationIdRef.current = undefined;
     setAudio(null); setSavedAudioUrl(null); setPhotos([]); setIntake(initialIntake); setDraft(emptyDraft()); setPendingRecommendation(null); setStatus("idle"); setMessage(""); setWarning(""); setActiveBookId(crypto.randomUUID());
   }
 
   function openSavedDraft(id: string) {
+    photoOwnerRef.current=null;runIdRef.current=null;setPhotos([]);setPublishedStoryPath("");setDraftsOpen(false);
     setOpenDraftVersion(version => version + 1);
     loadedDraftRef.current = "";
     setDraft(emptyDraft()); setAudio(null); setPendingRecommendation(null); setMessage(""); setWarning("");
@@ -255,7 +273,7 @@ export function StorybookApp() {
 
   const canGenerate =
     (Boolean(audio) || selectedGeneration?.status === "failed") &&
-    !isRecordingBusy && status !== "generating" && !hasPendingRecommendation &&
+    !isRecordingBusy && !isUploadingPhotos && !analysisBusy && status !== "generating" && !hasPendingRecommendation &&
     auth.status === "authenticated" && Boolean(auth.authToken);
 
   async function handleGenerate() {
@@ -271,7 +289,14 @@ export function StorybookApp() {
       const audioStorageId = await evidence.uploadAudio(audio as File);
       if (!audioStorageId) throw new Error("Your recording could not be saved.");
       const photoStorageIds = [];
-      for (const photo of photos) if (photo.file) photoStorageIds.push(await evidence.uploadPhoto(photo.file));
+      const uploadedPhotos:PhotoPreview[]=[];
+      for (const photo of photos) {
+        const saved=photo.storageId?{storageId:photo.storageId as Id<"_storage">,url:photo.url}:photo.file?await evidence.uploadPhoto(photo.file,{title:photo.title,description:photo.description}):null;
+        if(!saved)throw new Error("A family photo needs to be uploaded again.");
+        await evidence.updatePhotoDetails(saved.storageId,photo.title||"",photo.description||"");
+        photoStorageIds.push(saved.storageId);uploadedPhotos.push({...photo,...saved,file:undefined,uploadError:undefined});
+      }
+      setPhotos(uploadedPhotos);
       await evidence.submitGeneration({generationId, inputJson: JSON.stringify(intake), audioStorageId, fileName: audio!.name, photoStorageIds});
       setMessage("Your draft is saved. You can close this page and come back.");
     } catch (error) {
@@ -284,7 +309,8 @@ export function StorybookApp() {
       return;
     }
 
-    const accepted = pendingRecommendation;
+    try{ensurePhotosReady();}catch(error){setWarning(error instanceof Error?error.message:"Wait for your photos.");return;}
+    const accepted = {...pendingRecommendation,draft:activeDraft};
     evidence.recordEvent("preview_accepted", { generationId: generationIdRef.current });
     const warnings = accepted.warning ? [accepted.warning] : [];
     let runId: string | null = null;
@@ -367,18 +393,52 @@ export function StorybookApp() {
     }
   }
 
-  async function handlePhotoFiles(files: FileList | null) {
+  async function uploadBookPhoto(photo:PhotoPreview):Promise<PhotoPreview> {
+    if(!photo.file)return photo;
     try {
-      setPhotos(await readPhotoPreviews(files));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not preview the photos.");
-    }
+      const saved=await evidence.uploadPhoto(photo.file,{title:photo.title,description:photo.description},runIdRef.current);
+      return {...photo,...saved,file:undefined,uploadError:undefined};
+    }catch(error){return {...photo,uploadError:error instanceof Error?error.message:"This photo could not be uploaded. Retry or remove it."};}
+  }
+  async function handlePhotoFiles(files: FileList | null) {
+    if(!files?.length || isUploadingPhotos)return;
+    setIsUploadingPhotos(true);
+    try {
+      if(photos.length+files.length>MAX_STORY_PHOTOS)throw new Error("Keep up to three family photos. Remove one before adding another.");
+      const previews=await readPhotoPreviews(files);
+      const added=await Promise.all(previews.map(uploadBookPhoto));
+      setPhotos(current=>[...current,...added]);
+    }catch(error){setMessage(error instanceof Error?error.message:"Could not preview the photos.");}
+    finally{setIsUploadingPhotos(false);}
+  }
+  async function retryPhoto(id:string) {
+    const photo=photos.find(photo=>photo.id===id);if(!photo||isUploadingPhotos)return;
+    setIsUploadingPhotos(true);
+    try{const saved=await uploadBookPhoto(photo);setPhotos(current=>current.map(item=>item.id===id?saved:item));}
+    finally{setIsUploadingPhotos(false);}
+  }
+
+  function ensurePhotosReady() {
+    if(isUploadingPhotos || photos.some(photo=>!photo.storageId))throw new Error("Finish or retry your photo uploads before saving or exporting.");
+    if(analysisBusy)throw new Error("Wait for photo analysis to finish before saving or exporting.");
+  }
+  async function openSavedBook(page:StorybookPageSummary) {
+    try {
+      const saved=await evidence.loadOwnedBook(String(page._id));
+      if(!saved)throw new Error("This saved book is unavailable.");
+      evidence.openGeneration(null);loadedDraftRef.current="";photoOwnerRef.current=String(page._id);
+      runIdRef.current=saved.runId;setActiveBookId(String(page._id));setDraftsOpen(false);
+      setDraft({...emptyDraft(),...saved.draft});setPendingRecommendation(null);setAudio(null);setSavedAudioUrl(null);
+      setPhotos((saved.draft.photos||[]).map(photo=>({...photo,name:photo.title||"Family photograph",url:photo.url||""})));
+      setPublishedStoryPath(`/s/${saved.slug}`);setStatus("ready");setMessage("Your saved book is open for editing.");setWarning("");
+    }catch(error){setWarning(error instanceof Error?error.message:"This book could not be opened.");}
   }
 
   async function handleExport() {
+    ensurePhotosReady();
     evidence.recordEvent("export_requested", { generationId: generationIdRef.current });
     if (runIdRef.current) {
-      const saved = await evidence.publishStoryPage(draft, runIdRef.current);
+      const saved = await evidence.publishStoryPage(activeDraft, runIdRef.current);
       if (!saved) throw new Error("Save the story before exporting its QR code.");
       setPublishedStoryPath(`/s/${saved.slug}`);
     }
@@ -423,6 +483,7 @@ export function StorybookApp() {
   async function saveEditedBook() {
     setIsPublishing(true); setWarning("");
     try {
+      ensurePhotosReady();
       if (!runIdRef.current) throw new Error("Open a saved storybook before saving changes.");
       const saved=await evidence.publishStoryPage(activeDraft,runIdRef.current);
       if (!saved) throw new Error("Your changes could not be saved. Try again.");
@@ -432,6 +493,7 @@ export function StorybookApp() {
   }
 
   function loadDemo() {
+    setDraftsOpen(false);photoOwnerRef.current=null;setPhotos([]);
     const seeded = demoIntake(intake);
     setPendingRecommendation(null);
     setIntake(seeded);
@@ -463,6 +525,7 @@ export function StorybookApp() {
           </p>
         </div>
         <div className="proof-strip" aria-label="Account actions">
+          {auth.status === "authenticated" ? <button className="session-button" type="button" aria-expanded={draftsVisible} onClick={()=>setDraftsOpen(!draftsVisible)}>Drafts</button> : null}
           {auth.status === "authenticated" ? (
             <button className="session-button" type="button" disabled={isRecordingBusy} onClick={() => { setAudio(null); setDraft(emptyDraft()); setPhotos([]); setPendingRecommendation(null); setSavedAudioUrl(null); setActiveBookId(null); setStatus("idle"); evidence.openGeneration(null); void auth.signOut(); }}>
               <LogOut size={16} aria-hidden />
@@ -472,7 +535,7 @@ export function StorybookApp() {
         </div>
       </section>
 
-      {auth.status === "authenticated" ? <SavedDraftsPanel drafts={evidence.draftStories} onOpen={openSavedDraft} /> : null}
+      {auth.status === "authenticated" && draftsVisible ? <SavedDraftsPanel drafts={evidence.draftStories} onOpen={openSavedDraft} /> : null}
       {auth.status !== "authenticated" ? (
         <AuthGate auth={auth} />
       ) : evidence.paymentAvailable === undefined ? (
@@ -486,7 +549,7 @@ export function StorybookApp() {
             <button className="primary-button" type="button" onClick={resumeStorybook}>Continue your storybook</button>
             {evidence.paymentAvailable ? <button className="session-button" type="button" onClick={startNewDraft}>Start a new draft · 1 credit</button> : null}
           </> : <RazorpayCheckout key={recordingRecoveryKey} />}
-          <ProfileStoriesPanel deletingPageId={deletingPageId} onDelete={(pageId) => void handleDeleteStoryPage(pageId)} pages={evidence.storyPages} />
+          <ProfileStoriesPanel deletingPageId={deletingPageId} onEdit={page=>void openSavedBook(page)} onDelete={(pageId) => void handleDeleteStoryPage(pageId)} pages={evidence.storyPages} />
         </section>
       ) : (
       <section className={`workspace${activeDraft.sections.length ? "" : " workspace-empty"}`}>
@@ -519,11 +582,13 @@ export function StorybookApp() {
               <small>Up to 3 family photos for the storybook pages.</small>
               <input
                 type="file"
-                accept="image/*"
+                accept={PHOTO_TYPES.join(",")}
                 multiple
-                onChange={(event) => handlePhotoFiles(event.target.files)}
+                disabled={isUploadingPhotos || status==="generating" || isPublishing}
+                onChange={event=>{void handlePhotoFiles(event.target.files);event.currentTarget.value="";}}
               />
             </label>
+          <StorybookPhotosEditor photos={photos} sections={activeDraft.sections} disabled={status==="generating"||isPublishing||isUploadingPhotos} onChange={(id,patch)=>setPhotos(current=>current.map(photo=>photo.id===id?{...photo,...patch}:photo))} onRemove={id=>setPhotos(current=>current.filter(photo=>photo.id!==id))} onRetry={id=>void retryPhoto(id)} onAnalyze={id=>void analyzePhoto(id)}/>
           </div>
 
           {activeDraft.sections.length ? (
@@ -646,7 +711,7 @@ export function StorybookApp() {
 
           <ProfileStoriesPanel
             deletingPageId={deletingPageId}
-            onDelete={(pageId) => void handleDeleteStoryPage(pageId)}
+            onEdit={page=>void openSavedBook(page)} onDelete={(pageId) => void handleDeleteStoryPage(pageId)}
             pages={evidence.storyPages}
           />
         </aside>
@@ -670,7 +735,7 @@ export function StorybookApp() {
                 allowRecordingSharing={false}
                 disabled={status === "generating" || isPublishing}
                 storyUrl={hasPendingRecommendation ? undefined : publishedStoryPath}
-                allowExport={!hasPendingRecommendation}
+                allowExport={!hasPendingRecommendation && !isUploadingPhotos && !analysisBusy && !photos.some(photo=>photo.uploadError)}
                 onBeforeExport={handleExport}
                 onAfterExport={handleExportComplete}
               />
@@ -842,10 +907,12 @@ function LanguageReviewAlert({ note }: { note: string }) {
 function ProfileStoriesPanel({
   deletingPageId,
   onDelete,
+  onEdit,
   pages
 }: {
   deletingPageId: string | null;
   onDelete: (pageId: string) => void;
+  onEdit: (page:StorybookPageSummary) => void;
   pages: StorybookPageSummary[] | undefined;
 }) {
   return (
@@ -869,6 +936,7 @@ function ProfileStoriesPanel({
                 <span>{page.subtitle || formatStoryDate(page.createdAt)}</span>
               </div>
               <div className="profile-story-actions">
+                <button className="session-button" type="button" onClick={()=>onEdit(page)}>Edit</button>
                 <a
                   className="icon-link"
                   href={`/s/${page.slug}`}

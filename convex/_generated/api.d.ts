@@ -20,9 +20,12 @@ import type * as generationWorkflow from "../generationWorkflow.js";
 import type * as http from "../http.js";
 import type * as notifications from "../notifications.js";
 import type * as payments from "../payments.js";
+import type * as photoAnalysis from "../photoAnalysis.js";
+import type * as photoAnalysisFields from "../photoAnalysisFields.js";
 import type * as razorpay from "../razorpay.js";
 import type * as runs from "../runs.js";
 import type * as storybookPages from "../storybookPages.js";
+import type * as storybookPhotos from "../storybookPhotos.js";
 import type * as telemetry from "../telemetry.js";
 import type * as waitlist from "../waitlist.js";
 
@@ -45,9 +48,12 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   notifications: typeof notifications;
   payments: typeof payments;
+  photoAnalysis: typeof photoAnalysis;
+  photoAnalysisFields: typeof photoAnalysisFields;
   razorpay: typeof razorpay;
   runs: typeof runs;
   storybookPages: typeof storybookPages;
+  storybookPhotos: typeof storybookPhotos;
   telemetry: typeof telemetry;
   waitlist: typeof waitlist;
 }>;

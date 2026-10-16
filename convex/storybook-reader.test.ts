@@ -54,8 +54,8 @@ test("saved section images resolve publicly, reject another user's images, and k
     return { owner, other, run, image, foreign };
   });
   const user = t.withIdentity({ subject: `${seeded.owner}|session` });
-  const { illustrationUrl, illustrationStorageId, ...base } = demoDraft();
-  void illustrationUrl; void illustrationStorageId;
+  const { photos, illustrationUrl, illustrationStorageId, ...base } = demoDraft();
+  void photos; void illustrationUrl; void illustrationStorageId;
   const draft = { ...base, sections: [{ id: "coffee", heading: "Coffee", body: "I kept this tumbler.", artifactSubject: "Coffee tumbler", artifactBrief: "One metal tumbler", illustrationStorageId: seeded.image }] };
   await expect(user.mutation(api.storybookPages.publish, { runId: seeded.run, draft: { ...draft, sections: [{ ...draft.sections[0], illustrationStorageId: seeded.foreign }] } })).rejects.toThrow(/access to this storybook image/);
   const page = await user.mutation(api.storybookPages.publish, { runId: seeded.run, draft });
@@ -90,8 +90,8 @@ test("saving a long book retains every chapter and separates cover text from edi
     const run = await ctx.db.insert("runs", {userId:owner,buyerName:"",email:"",elderName:"Test",relationship:"Parent",originPlace:"Home",languageMix:"Telugu",hasAudio:false,photoCount:0,status:"draft_ready",createdAt:1,updatedAt:1});
     return {owner,run};
   });
-  const {illustrationUrl,illustrationStorageId,...base} = demoDraft();
-  void illustrationUrl; void illustrationStorageId;
+  const {photos,illustrationUrl,illustrationStorageId,...base} = demoDraft();
+  void photos; void illustrationUrl; void illustrationStorageId;
   const sections = Array.from({length:23},(_,i)=>({id:`chapter-${i}`,heading:`${i}: ${"A remembered place ".repeat(12)}`,body:`${i}\n\n${"మా జ్ఞాపకాలు. ".repeat(850)}`}));
   const draft = {...base,subtitle:"The full edition details\n4 September 2026",coverSubtitle:"నారాయణం రమాదేవి జ్ఞాపకాలు",dedication:"For the family. ".repeat(90),closingNote:"The final memory. ".repeat(90),sections};
   expect(normalizeDraft(draft).coverSubtitle).toBe(draft.coverSubtitle);
@@ -114,7 +114,7 @@ test("edited books reopen with the latest wording and original artwork IDs only 
     const run=await ctx.db.insert("runs",{userId:owner,buyerName:"",email:"",elderName:"Fictional",relationship:"Parent",originPlace:"Home",languageMix:"English",hasAudio:false,photoCount:0,status:"draft_ready",createdAt:1,updatedAt:1});
     return {owner,other,run};
   });
-  const {illustrationUrl,illustrationStorageId,...base}=demoDraft();void illustrationUrl;void illustrationStorageId;
+  const {photos,illustrationUrl,illustrationStorageId,...base}=demoDraft();void photos; void illustrationUrl;void illustrationStorageId;
   const draft={...base,sections:base.sections.map(({illustrationUrl,illustrationStorageId,...section})=>{void illustrationUrl;void illustrationStorageId;return section;})};
   const user=t.withIdentity({subject:`${owner}|session`});
   const original=await user.mutation(api.storybookPages.publish,{runId:run,draft});

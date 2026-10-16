@@ -1,5 +1,7 @@
 - 2026-10-15: Text editing/regeneration and `.txt` download released from committed production snapshot. Code `5a56083`; website `dpl_4w56fALkJPDgoQ4re9Quk1XFxytd`; Convex `elegant-mosquito-650`. Launch flag remains false. 79 tests/checks, hosted build, desktop/phone public-book check and complete actual text download pass. Owner-safe save/reopen has automated coverage; live owner-account check remains. Other pending features remain local. Details: `docs/PUBLISHING.md`. Next: owner tries editing and saving one generated book.
 
+- 2026-10-16: **Published the complete photo flow.** AI analysis, editable/adoptable captions, chapter matching/manual override, original-photo reader/PDF, library Edit and owner save/reopen are live. Website `dpl_5PvQxhFKtTEkPdacpxjQk1E3NPyb`; production Convex `elegant-mosquito-650`; launch flag false. 90 scoped tests and build/types/lint pass; actual production fictional upload/AI/save/reopen, desktop/phone and rendered PDF/text downloads verified. Supersedes earlier unpublished photo status below. Details: `docs/PUBLISHING.md`. Next: owner reviews a real photo in their saved book.
+
 # Text-editing release — 2026-10-15
 
 - Commit and publish scoped exact-wording editing/regeneration, text download and owner-safe reopening of saved wording. Preserve the current launch flag and already-live PDF template. 79 tests, TypeScript/build and release browser checks pass; deployment/public-domain verification follows. Other local projects remain outside this release.

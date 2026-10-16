@@ -1,5 +1,5 @@
 import type {StorySection} from "@/lib/storybook";
-import type {BookReadingPage,ChapterEntry,ContentsRow} from "@/lib/storybook-book-layout";
+import type {BookReadingPage,ChapterEntry,ContentsRow,PhotoReadingPage} from "@/lib/storybook-book-layout";
 import {ArtifactImage} from "./storybook-artwork";
 
 type BookIdentity={title:string;subtitle:string;coverSubtitle?:string;sections:StorySection[];illustrationUrl?:string|null;stampSubject?:string};
@@ -32,12 +32,20 @@ export function ContentsPage({rows,chapters,continued=false,onNavigate,exporting
  return <li key={`${row.id}:${index}`}><a href={`#chapter-${chapter.chapter}`} data-book-page={chapter.page} onClick={!onNavigate?undefined:e=>{e.preventDefault();onNavigate(chapter.position);}}><span><small>Chapter {String(chapter.chapter).padStart(2,"0")}{row.continued?" · continued":""}</small><span>{row.heading}</span></span><span className="folio-contents-number">{chapter.page}</span></a></li>;
  })}</ol></article>;
 }
-export function ChapterOpening({page,chapter,exporting=false}:{page:BookReadingPage;chapter:ChapterEntry;exporting?:boolean}) {
- if(page.continued)return <article className="folio-page folio-continuation-page" aria-label="Blank facing page" data-export-page={exporting||undefined}/>;
+export function ChapterOpening({page,chapter,number=chapter.page,exporting=false}:{page:BookReadingPage;chapter:ChapterEntry;number?:number;exporting?:boolean}) {
  return <article className="folio-page folio-chapter-opening" id={exporting?undefined:`chapter-${chapter.chapter}`} aria-label={`Chapter ${chapter.chapter}: ${chapter.heading}`} data-export-page={exporting||undefined}>
  <p className="folio-book-label">Chapter {String(chapter.chapter).padStart(2,"0")}</p>
  {page.section.illustrationUrl?<figure className="folio-chapter-art"><ArtifactImage src={page.section.illustrationUrl} alt={page.section.artifactSubject||"Story artifact"}/></figure>:<div className="folio-chapter-rule" aria-hidden="true"/>}
- <h2>{chapter.heading}</h2><footer><span/><span>{chapter.page}</span></footer></article>;
+ <h2>{chapter.heading}</h2><footer><span/><span>{number}</span></footer></article>;
+}
+export function PhotographPage({page,number,chapter,opensChapter=false,exporting=false}:{page:PhotoReadingPage;number:number;chapter?:ChapterEntry;opensChapter?:boolean;exporting?:boolean}) {
+ return <article className={`folio-page folio-photo-page${page.continued?" folio-photo-caption-page":""}`} id={!exporting&&opensChapter&&chapter?`chapter-${chapter.chapter}`:undefined} aria-label={`Photograph: ${page.photo.title||"Family photograph"}${page.continued?" · continued":""}`} data-export-page={exporting||undefined}>
+  <figure>{!page.continued?<div className="folio-photo-mount">
+   {/* eslint-disable-next-line @next/next/no-img-element */}
+   <img src={page.photo.url||undefined} alt={page.photo.title||page.photo.description||"Family photograph"} crossOrigin="anonymous"/>
+  </div>:null}<figcaption>{page.photo.title?<h2>{page.photo.title}</h2>:null}<div className="folio-photo-caption-copy">{page.body.split(/\n\s*\n/).filter(Boolean).map((paragraph,index)=><p key={index}>{paragraph}</p>)}</div></figcaption></figure>
+  <footer><span>{page.continued?"Photograph · continued":chapter?.heading}</span><span>{number}</span></footer>
+ </article>;
 }
 export function BackCover({story,exporting=false}:{story:BookIdentity;exporting?:boolean}) {
  return <article className="folio-page folio-back-cover" aria-label="Back cover" data-export-page={exporting||undefined}><div className="folio-back-frame"><p className="folio-book-label">Family memories</p><h2>{story.title}</h2><span className="folio-title-rule" aria-hidden="true"/><div className="folio-back-brand"><a className="folio-back-website" href="https://charpai.stories.here.now">charpai.stories.here.now</a><BookLogo className="folio-book-logo-light"/></div></div></article>;

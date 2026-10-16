@@ -1,3 +1,5 @@
+import {storedStoryPhoto} from "./storybookPhotos";
+import {photoAnalysisRecord} from "./photoAnalysisFields";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
@@ -74,7 +76,7 @@ export default defineSchema({
     runId: v.optional(v.id("runs")), error: v.optional(v.string()), createdAt: v.number(), updatedAt: v.number()
   }).index("by_userId", ["userId"]).index("by_generationId", ["generationId"]),
   generationPhotos: defineTable({
-    userId: v.id("users"), storageId: v.id("_storage"), fileName: v.string(), contentType: v.string(), size: v.number(), createdAt: v.number()
+    userId: v.id("users"), storageId: v.id("_storage"), fileName: v.string(), contentType: v.string(), size: v.number(), createdAt: v.number(), title:v.optional(v.string()),description:v.optional(v.string()),analysis:v.optional(photoAnalysisRecord),analysisLease:v.optional(v.object({token:v.string(),contextKey:v.string(),expiresAt:v.number()}))
   }).index("by_storage_id", ["storageId"]).index("by_userId", ["userId"]),
   generationCheckpoints: defineTable({
     draftId: v.id("generationDrafts"), key: v.string(), artifactStorageId: v.id("_storage"),
@@ -193,6 +195,7 @@ export default defineSchema({
     title: v.string(),
     subtitle: v.string(),
     coverSubtitle: v.optional(v.string()),
+    photos:v.optional(v.array(storedStoryPhoto)),
     dedication: v.string(),
     languageNote: v.string(),
     sections: v.array(storySection),
